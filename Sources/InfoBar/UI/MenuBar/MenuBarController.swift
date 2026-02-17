@@ -4,11 +4,14 @@ import Foundation
 @MainActor
 public final class MenuBarController {
     private var item: NSStatusItem?
-    private let statusView = QuotaStatusView(
-        frame: NSRect(x: 0, y: 0, width: QuotaLayoutMetrics.statusWidth, height: QuotaLayoutMetrics.statusHeight)
-    )
+    private let statusView: QuotaStatusView
 
-    public init() {}
+    public init(providerID: String = "codex") {
+        self.statusView = QuotaStatusView(
+            frame: NSRect(x: 0, y: 0, width: QuotaLayoutMetrics.statusWidth, height: QuotaLayoutMetrics.statusHeight),
+            providerID: providerID
+        )
+    }
 
     public func start() {
         guard item == nil else { return }

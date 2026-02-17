@@ -49,13 +49,29 @@ public struct QuotaDisplayModel: Equatable {
 
     private static func durationText(from start: Date, to end: Date) -> String {
         let seconds = max(0, end.timeIntervalSince(start))
-        let days = Int(seconds / 86_400)
-        let hours = (seconds - TimeInterval(days * 86_400)) / 3_600
+        let days = seconds / 86_400
+        if days >= 1 {
+            return daysText(days)
+        }
 
-        if days > 0 {
-            return "\(days)d\(hoursText(hours))"
+        let hours = seconds / 3_600
+        if hours < 1 {
+            return minutesText(seconds: seconds)
         }
         return hoursText(hours)
+    }
+
+    private static func daysText(_ days: Double) -> String {
+        let rounded = (days * 10).rounded() / 10
+        if abs(rounded.rounded() - rounded) < 0.0001 {
+            return "\(Int(rounded.rounded()))d"
+        }
+        return "\(rounded)d"
+    }
+
+    private static func minutesText(seconds: Double) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        return "\(minutes)min"
     }
 
     private static func hoursText(_ hours: Double) -> String {
