@@ -16,6 +16,7 @@ public final class QuotaReader: Reader<QuotaSnapshot> {
             let snapshot = try fetcher.fetchSnapshot()
             callback(snapshot)
         } catch {
+            fputs("[QuotaReader] \(type(of: fetcher)) failed: \(error)\n", stderr)
             callback(nil)
         }
     }

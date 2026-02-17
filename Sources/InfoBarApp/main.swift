@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         for provider in QuotaProviderRegistry.defaultProviders() {
-            let menuBar = MenuBarController()
+            let menuBar = MenuBarController(providerID: provider.id)
             let widget = QuotaWidget()
             let reader = QuotaReader(fetcher: provider.makeFetcher())
             let module = QuotaModule(reader: reader)

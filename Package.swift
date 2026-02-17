@@ -10,9 +10,15 @@ let package = Package(
         .library(name: "InfoBar", targets: ["InfoBar"]),
         .executable(name: "InfoBarApp", targets: ["InfoBarApp"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/steipete/SweetCookieKit", from: "0.4.0")
+    ],
     targets: [
         .target(
             name: "InfoBar",
+            dependencies: [
+                .product(name: "SweetCookieKit", package: "SweetCookieKit")
+            ],
             resources: [
                 .copy("Modules/Quota/config.plist"),
                 .copy("Resources")

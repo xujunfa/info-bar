@@ -15,6 +15,9 @@ public enum QuotaProviderRegistry {
         [
             QuotaProviderRegistration(id: "codex") {
                 CodexUsageClient()
+            },
+            QuotaProviderRegistration(id: "zenmux") {
+                ZenMuxUsageClient()
             }
         ]
     }

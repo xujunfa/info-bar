@@ -24,9 +24,9 @@ final class QuotaDisplayModelTests: XCTestCase {
         )
         let model = QuotaDisplayModel(snapshot: snapshot)
 
-        XCTAssertEqual(model.text, "H: 13% 2h | W: 20% 2d3.5h")
+        XCTAssertEqual(model.text, "H: 13% 2h | W: 20% 2.1d")
         XCTAssertEqual(model.topLine, "H: 13% 2h")
-        XCTAssertEqual(model.bottomLine, "W: 20% 2d3.5h")
+        XCTAssertEqual(model.bottomLine, "W: 20% 2.1d")
         XCTAssertEqual(model.ratio, 0.13, accuracy: 0.0001)
         XCTAssertEqual(model.state, .normal)
     }
@@ -66,6 +66,22 @@ final class QuotaDisplayModelTests: XCTestCase {
         let model = QuotaDisplayModel(snapshot: snapshot)
 
         XCTAssertEqual(model.topLine, "D: 55% 1h")
-        XCTAssertEqual(model.bottomLine, "M: 12% 1d2h")
+        XCTAssertEqual(model.bottomLine, "M: 12% 1.1d")
+    }
+
+    func testDisplayModelUsesMinutesWhenLessThanOneHour() {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let snapshot = QuotaSnapshot(
+            providerID: "zenmux",
+            windows: [
+                QuotaWindow(id: "hour_5", label: "H", usedPercent: 1, resetAt: fetchedAt.addingTimeInterval(45 * 60)),
+                QuotaWindow(id: "week", label: "W", usedPercent: 10, resetAt: fetchedAt.addingTimeInterval(3_600))
+            ],
+            fetchedAt: fetchedAt
+        )
+
+        let model = QuotaDisplayModel(snapshot: snapshot)
+
+        XCTAssertEqual(model.topLine, "H: 1% 45min")
     }
 }
