@@ -1,126 +1,97 @@
-# Info Bar Handoff (2026-02-17)
+# Info Bar Handoff (2026-02-18)
 
 ## 0. 归档记录
 
 - 本轮前版本已归档到：
-  - `.context/archive/HANDOFF-2026-02-17-zenmux-cookie-and-ui.md`
+  - `.context/archive/HANDOFF-2026-02-18-minimax-provider-integration.md`
 - 更早版本：
+  - `.context/archive/HANDOFF-2026-02-17-minimax-before-update.md`
+  - `.context/archive/HANDOFF-2026-02-17-zenmux-cookie-and-ui.md`
   - `.context/archive/HANDOFF-2026-02-17-pre-quota-refactor.md`
 
 ## 1. 当前状态（已完成）
 
 - 项目路径：`/Users/xujunfa/Documents/workspace/github/info-bar`
-- 已接入两个真实 Provider：
+- 已接入三个真实 Provider：
   - `codex`（OAuth/Auth 文件 + usage API）
   - `zenmux`（本地浏览器 Cookie + subscription usage API）
+  - `minimax`（本地浏览器 Cookie + coding plan remains API）
 - 菜单栏保持 Stats 风格：左 icon + 右侧双行文本（`<label>: <used%> <timeLeft>`）
-- ZenMux 已同屏展示（独立菜单栏项）并使用独立图标 `zenmux.svg`
 
 ## 2. 本轮关键变更
 
-### 2.1 多 Provider 同屏链路
+### 2.1 MiniMax Provider 接入
 
-- `QuotaProviderRegistry.defaultProviders()` 已包含 `codex` + `zenmux`
-- `main.swift` 遍历 provider 创建：
-  - `MenuBarController(providerID:)`
-  - `QuotaReader(fetcher:)`
-  - `QuotaModule`
-  - `QuotaWidget`
+- `QuotaProviderRegistry.defaultProviders()` 已包含 `codex` + `zenmux` + `minimax`
+- `main.swift` 无需改动，按 registry 自动创建菜单栏项
 
 关键文件：
 - `Sources/InfoBar/Modules/Quota/QuotaProviderRegistry.swift`
-- `Sources/InfoBarApp/main.swift`
+- `Tests/InfoBarTests/Modules/Quota/QuotaProviderRegistryTests.swift`
 
-### 2.2 ZenMux 真实 Quota 接入
+### 2.2 MiniMax 真实 Quota 映射（已修正语义）
 
-- `ZenMuxUsageClient` 实现 `QuotaSnapshotFetching`
-- 已适配 ZenMux 真实返回结构：`data[]`, `periodType`, `usedRate`, `cycleEndTime`
-- `usedRate`(0~1) -> 百分比映射
-- 窗口排序优先级：`hour_5` > `day` > `week` > `month`
-
-关键文件：
-- `Sources/InfoBar/Modules/Quota/ZenMuxUsageClient.swift`
-
-### 2.3 浏览器 Cookie 可复用能力（后续可扩展）
-
-- 新增通用收集器 `BrowserQuotaCookieCollector`
-- 可配置项：
-  - `domains`
-  - `requiredCookieNames`
-  - `preferredBrowsers`（chrome/safari/firefox）
-- `ZenMuxBrowserCookieImporter` 改为配置驱动复用该能力
+- 新增 `MiniMaxUsageClient` 实现 `QuotaSnapshotFetching`
+- 默认接口：
+  - `https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains?GroupId=2015339786063057444`
+- 支持环境变量覆盖：
+  - `MINIMAX_USAGE_URL`
+  - `MINIMAX_GROUP_ID`
+- 当前映射规则：
+  - `current_interval_total_count` = 总额度（例如 1500）
+  - `current_interval_usage_count` = **剩余额度**（remains）
+  - `used = total - remains`
+  - `usedPercent = round(used / total * 100)`
+  - `remains_time`（毫秒）-> `resetAt = fetchedAt + remains_time`
 
 关键文件：
-- `Sources/InfoBar/Modules/Quota/BrowserQuotaCookieCollector.swift`
-- `Sources/InfoBar/Modules/Quota/ZenMuxBrowserCookieImporter.swift`
+- `Sources/InfoBar/Modules/Quota/MiniMaxUsageClient.swift`
+- `Tests/InfoBarTests/Modules/Quota/MiniMaxUsageClientTests.swift`
 
-### 2.4 Cookie 优先级修复（解决 401）
+### 2.3 MiniMax 浏览器 Cookie 复用
 
-- `ZenMuxCookieStore` 当前优先级：
-  1. 环境变量（`ZENMUX_COOKIE_HEADER` / `ZENMUX_SESSION_*`）
-  2. 浏览器导入器（SweetCookieKit）
-  3. 进程内 `HTTPCookieStorage`
-- 目的：避免运行时匿名 Cookie 覆盖浏览器已登录 Cookie 导致持续 401
-
-关键文件：
-- `Sources/InfoBar/Modules/Quota/ZenMuxUsageClient.swift`
-
-### 2.5 菜单栏图标按 Provider 选择
-
-- `QuotaStatusView` 支持按 `providerID` 加载 `<providerID>.svg`
-- 找不到资源时 fallback 到 `codex.svg` 和 SF Symbol
+- 新增 `MiniMaxBrowserCookieImporter`
+- 复用 `BrowserQuotaCookieCollector`
+- 配置：
+  - domains: `www.minimaxi.com`, `.minimaxi.com`, `minimaxi.com`
+  - requiredCookieNames: 空集合
+  - preferredBrowsers: chrome/safari/firefox
 
 关键文件：
-- `Sources/InfoBar/UI/MenuBar/QuotaStatusView.swift`
-- `Sources/InfoBar/UI/MenuBar/MenuBarController.swift`
-- `Sources/InfoBar/Resources/Icons/zenmux.svg`
+- `Sources/InfoBar/Modules/Quota/MiniMaxBrowserCookieImporter.swift`
 
-### 2.6 剩余时间显示规则更新
+### 2.4 MiniMax 图标
 
-- `> 1d`：显示天数（1 位小数），例如 `3.5d`
-- `< 1h`：显示分钟，例如 `45min`
-- 其余：显示小时（整数或 1 位小数）
+- 新增 provider 图标：`minimax.svg`
+- `QuotaStatusView` 已具备按 providerID 自动加载 `<providerID>.svg` 能力，无需额外逻辑变更
 
 关键文件：
-- `Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
-
-### 2.7 失败诊断增强
-
-- `ZenMuxUsageClient` 失败路径打印：`status + body 片段`
-- `QuotaReader` 失败打印：`fetcher 类型 + error`
-- `missingUsageData` 可携带原始 payload 片段
-
-关键文件：
-- `Sources/InfoBar/Modules/Quota/ZenMuxUsageClient.swift`
-- `Sources/InfoBar/Modules/Quota/QuotaReader.swift`
+- `Sources/InfoBar/Resources/Icons/minimax.svg`
 
 ## 3. 运行与验证
 
 - 构建：`swift build`
 - 测试：`swift test`
 - 启动：`swift run InfoBarApp`
-- ZenMux live probe（可选）：
-  - `ZENMUX_LIVE_PROBE=1 swift test --filter ZenMuxUsageClientTests/testLiveProbeFetchesSnapshotWhenEnabled`
 
-最新结果（本地）：
-- `swift test`：`26 tests`，`0 failures`，`1 skipped`
+最新结果（本地）
+- `swift test`：`31 tests`，`0 failures`，`1 skipped`
 - `swift build`：通过
-- live probe：通过
+- `swift run InfoBarApp`：可构建并启动
 
 ## 4. 关键测试
 
-- `Tests/InfoBarTests/Modules/Quota/ZenMuxUsageClientTests.swift`
-  - `testMapsRealZenMuxArrayPayload`
-  - `testCookieHeaderPrefersBrowserImporterOverRuntimeCookieStorage`
-  - `testZenMuxBrowserCookieImporterUsesReusableCollector`
-  - `testLiveProbeFetchesSnapshotWhenEnabled`（默认 skip）
-- `Tests/InfoBarTests/Modules/Quota/QuotaDisplayModelTests.swift`
-  - 天/分钟时间展示规则回归
+- `Tests/InfoBarTests/Modules/Quota/MiniMaxUsageClientTests.swift`
+  - `testDecodesRemainsPayloadAndMapsSnapshot`
+  - `testMapsZeroUsedPercentWhenRemainsEqualsTotal`
+  - `testThrowsApiFailureWhenStatusCodeNonZero`
+  - `testThrowsMissingUsageDataWhenModelRemainsUnavailable`
+  - `testMiniMaxBrowserCookieImporterUsesReusableCollector`
 - `Tests/InfoBarTests/Modules/Quota/QuotaProviderRegistryTests.swift`
-  - codex + zenmux 注册回归
+  - `testDefaultProvidersContainCodexZenMuxAndMiniMax`
 
-## 5. 下轮建议
+## 5. 下轮建议（优先级）
 
-1. 把诊断日志切到可配置开关（DEBUG/ENV），避免长期 stderr 噪声。
-2. 增加 provider 级错误状态（auth/network/parse）并透传到显示层，不再统一 `-- --`。
-3. 若继续新增 Provider，复用 `BrowserQuotaCookieCollector`，仅新增 importer 配置 + usage 映射。
+1. 增加 provider 级错误状态语义（auth/network/parse）并透传 UI，避免统一 `-- --`。
+2. 将 Codex/ZenMux/MiniMax 的失败诊断日志改为 DEBUG/ENV 开关，默认静默。
+3. 若后续要显示 `used/total`（如 `100/1500`），先抽象 display 文本策略，避免污染统一 `QuotaDisplayModel`。

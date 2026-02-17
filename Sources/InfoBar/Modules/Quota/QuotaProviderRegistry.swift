@@ -18,6 +18,9 @@ public enum QuotaProviderRegistry {
             },
             QuotaProviderRegistration(id: "zenmux") {
                 ZenMuxUsageClient()
+            },
+            QuotaProviderRegistration(id: "minimax") {
+                MiniMaxUsageClient()
             }
         ]
     }
