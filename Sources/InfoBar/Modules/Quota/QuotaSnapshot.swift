@@ -1,28 +1,39 @@
 import Foundation
 
-public struct QuotaSnapshot: Equatable, Codable {
-    public let limit: Int
-    public let used: Int
+public struct QuotaWindow: Equatable, Codable {
+    public let id: String
+    public let label: String
+    public let usedPercent: Int
     public let resetAt: Date
-    public let fetchedAt: Date
 
-    public init(limit: Int, used: Int, resetAt: Date, fetchedAt: Date) {
-        self.limit = max(limit, 0)
-        self.used = max(used, 0)
+    public init(id: String, label: String, usedPercent: Int, resetAt: Date) {
+        self.id = id
+        self.label = label
+        self.usedPercent = max(0, min(100, usedPercent))
         self.resetAt = resetAt
-        self.fetchedAt = fetchedAt
-    }
-
-    public var remaining: Int {
-        max(limit - used, 0)
     }
 
     public var usedRatio: Double {
-        guard limit > 0 else { return 0 }
-        return Double(used) / Double(limit)
+        Double(usedPercent) / 100
+    }
+}
+
+public struct QuotaSnapshot: Equatable, Codable {
+    public let providerID: String
+    public let windows: [QuotaWindow]
+    public let fetchedAt: Date
+
+    public init(providerID: String, windows: [QuotaWindow], fetchedAt: Date) {
+        self.providerID = providerID
+        self.windows = windows
+        self.fetchedAt = fetchedAt
     }
 
-    public var isExhausted: Bool {
-        used >= limit && limit > 0
+    public var primaryWindow: QuotaWindow? {
+        windows.first
+    }
+
+    public var primaryUsedRatio: Double {
+        primaryWindow?.usedRatio ?? 0
     }
 }

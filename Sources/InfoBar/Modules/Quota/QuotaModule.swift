@@ -16,6 +16,14 @@ public final class QuotaModule: Module {
         self.widgets = widgets
     }
 
+    public override func mount() {
+        reader.start()
+    }
+
+    public override func unmount() {
+        reader.stop()
+    }
+
     private func loadCallback(_ snapshot: QuotaSnapshot?) {
         self.widgets.filter { $0.isActive }.forEach { $0.setSnapshot(snapshot) }
     }
