@@ -1,106 +1,151 @@
-# Info Bar Handoff (2026-02-18)
+# Info Bar Handoff (2026-02-19)
 
 ## 0. 归档记录
 
 - 本轮前版本已归档到：
-  - `.context/archive/HANDOFF-2026-02-18-bigmodel-before-update.md`
-- 更早版本：
-  - `.context/archive/HANDOFF-2026-02-18-minimax-provider-integration.md`
-  - `.context/archive/HANDOFF-2026-02-17-minimax-before-update.md`
-  - `.context/archive/HANDOFF-2026-02-17-zenmux-cookie-and-ui.md`
-  - `.context/archive/HANDOFF-2026-02-17-pre-quota-refactor.md`
+  - `.context/archive/HANDOFF-2026-02-19-settings-redesign-v1.md`
+- 更早版本见各 archive 文件
 
-## 1. 当前状态（已完成）
+## 1. 当前状态（已完成 & 已验证）
 
-- 项目路径：`/Users/xujunfa/Documents/workspace/github/info-bar`
-- 已接入四个真实 Provider：
-  - `codex`（OAuth/Auth 文件 + usage API）
-  - `zenmux`（浏览器 Cookie + subscription usage API）
-  - `minimax`（浏览器 Cookie + coding plan remains API）
-  - `bigmodel`（浏览器 Cookie + quota limit API）
-- 菜单栏保持 Stats 风格：左 icon + 右侧双行文本（`<label>: <used%> <timeLeft>`）
-- 主架构不变：`Module -> Reader -> Widget -> Popup`
+- 四个 Provider 正常运行：`codex`、`zenmux`、`minimax`、`bigmodel`
+- **Settings UI Redesign 完成**：macOS split-pane 风格，拖拽重排、即时反映到 Menu Bar
+- **三个 UI Bugfix 完成**：Panel 高度折叠、图标不可见、右侧 detail 布局溢出
 
-## 2. 本轮关键变更
+## 2. 架构速览
 
-### 2.1 BigModel Provider 接入
+```
+AppDelegate (main.swift)
+  ├── QuotaProviderRegistry.defaultProviders()
+  ├── [MenuBarController]  — NSStatusItem × N，order 由 ProviderOrderStore 驱动
+  ├── [QuotaModule]        — Reader + Widget，独立 fetch 循环
+  ├── SettingsWindowController (NSPanel 640×440)
+  │     ├── ProviderListViewController   — NSTableView + DnD
+  │     └── ProviderDetailViewController — header + progress bars + NSSwitch
+  ├── ProviderVisibilityStore  — UserDefaults "InfoBar.providerVisibility"
+  └── ProviderOrderStore       — UserDefaults "InfoBar.providerOrder"
+```
 
-- `QuotaProviderRegistry.defaultProviders()` 已包含 `codex` + `zenmux` + `minimax` + `bigmodel`
-- `main.swift` 无需改动，按 registry 自动创建菜单栏项
+## 3. 本轮关键变更
 
-关键文件：
-- `Sources/InfoBar/Modules/Quota/QuotaProviderRegistry.swift`
-- `Tests/InfoBarTests/Modules/Quota/QuotaProviderRegistryTests.swift`
+### 3.1 SettingsProviderViewModel 扩展
 
-### 2.2 BigModel 真实 Quota 映射
+| 新字段 | 说明 |
+|--------|------|
+| `WindowViewModel` (nested struct) | `label`, `usedPercent`, `timeLeft`（"2d"/"3h"/"45m"/"—"） |
+| `windows: [WindowViewModel]` | 从 `snapshot.windows` 映射；`resetAt` → `timeLeft` |
+| `fetchedAt: Date?` | 直接从 `snapshot.fetchedAt` 透传 |
+| `summary: String` | 保留，向后兼容 |
 
-- 新增 `BigModelUsageClient` 实现 `QuotaSnapshotFetching`
-- 默认接口：
-  - `https://open.bigmodel.cn/api/monitor/usage/quota/limit`
-- 支持环境变量覆盖：
-  - `Z_AI_QUOTA_URL`（完整 URL）
-  - `Z_AI_API_HOST`（host/base URL）
-- 响应映射规则：
-  - `TOKENS_LIMIT` -> `QuotaWindow(id: "tokens_limit", label: "T")`
-  - `TIME_LIMIT` -> `QuotaWindow(id: "time_limit", label: "M")`
-  - 百分比优先按 `usage/currentValue/remaining` 计算，缺失时回退 `percentage`
-  - `nextResetTime`（毫秒时间戳）-> `resetAt`
+### 3.2 SettingsWindowController 完全重写
 
-关键文件：
-- `Sources/InfoBar/Modules/Quota/BigModelUsageClient.swift`
-- `Tests/InfoBarTests/Modules/Quota/BigModelUsageClientTests.swift`
+**结构**
+- NSPanel 640×440，`titled + closable + nonactivatingPanel`
+- `preferredContentSize` 在赋值 `contentViewController` 前设置（否则 panel 折叠为标题栏）
+- NSSplitViewController：左 200px 固定 / 右 flexible
 
-### 2.3 BigModel 鉴权与 Cookie 方案（最终）
+**ProviderListViewController**
+- NSTableView，rowHeight 36，无 header
+- `ProviderRowView: NSTableCellView`：drag handle（`line.3.horizontal`）+ 20×20 icon（`isTemplate=true`）+ 13pt semibold name + 8px 状态点
+- Drag & Drop：`NSPasteboardItem` 写 row index → `acceptDrop` 计算 `adjustedRow = fromRow < row ? row-1 : row` → `moveRow(at:to:)` 动画 → `onOrderChanged`
+- `reload(viewModels:)` 按 providerID 恢复选中行
 
-- 最终与 ZenMux/MiniMax 一致：走浏览器 Cookie 导入
-- 新增 `BigModelBrowserCookieImporter`，复用 `BrowserQuotaCookieCollector`
-- domains 配置：
-  - `open.bigmodel.cn`, `.bigmodel.cn`, `bigmodel.cn`, `z.ai`, `.z.ai`, `api.z.ai`
-- 鉴于服务端报错要求 Header 鉴权，`BigModelUsageClient` 会从 Cookie Header 中提取 token 并补发：
-  - `Authorization: Bearer <token>`
-- token 提取支持：
-  - `authorization`, `access_token`, `access-token`, `token`, `api_key` 等常见键
-  - `bigmodel_token*` 前缀（包含 `bigmodel_token_production`）
+**ProviderDetailViewController**
+- 无选中：居中显示 "Select a provider"
+- 有选中：header（40×40 icon + 18pt bold name + "Updated: Xm ago"）→ divider → USAGE 区（`NSProgressIndicator.small` + "XX%" + "(Xd left)"）→ divider → Show in menu bar（`NSSwitch` via `@MainActor ToggleSwitchBridge`）
+- 每次 `configure(viewModel:)` 完全 rebuild subviews
+- **布局要点**：padding 放在 container 的 anchor offset（`constant: ±20`），不用 `edgeInsets`，使 `container.widthAnchor == 可用内容宽`，所有 `row.widthAnchor = container.widthAnchor` 精确成立
 
-关键文件：
-- `Sources/InfoBar/Modules/Quota/BigModelBrowserCookieImporter.swift`
-- `Sources/InfoBar/Modules/Quota/BigModelUsageClient.swift`
-- `Tests/InfoBarTests/Modules/Quota/BigModelUsageClientTests.swift`
+### 3.3 MenuBarController.stop()
 
-### 2.4 BigModel 图标
+```swift
+public func stop() {
+    if let item {
+        NSStatusBar.system.removeStatusItem(item)
+        self.item = nil
+        self.actionBridge = nil
+    }
+}
+```
+`statusView`（含已有 snapshot 数据）由 controller 持有，remount 时直接复用。
 
-- 新增 provider 图标：`bigmodel.svg`
-- `QuotaStatusView` 仍按 providerID 自动加载 `<providerID>.svg`
+### 3.4 main.swift — mountMenuBars(orderedIDs:)
 
-关键文件：
-- `Sources/InfoBar/Resources/Icons/bigmodel.svg`
+**两阶段启动**：Phase 1 创建所有 module/widget（不调 `start()`），Phase 2 按 `orderStore.orderedIDs` 顺序 mount。
 
-## 3. 运行与验证
+```swift
+private func mountMenuBars(orderedIDs: [String]) {
+    // 停止所有现有 item
+    for id in menuBarsByID.keys { menuBarsByID[id]?.stop() }
+    // 倒序 mount：NSStatusBar 新 item 出现在最左侧
+    for id in orderedIDs.reversed() {
+        bar.start(); bar.setVisible(...); bar.update(snapshot: ...)
+    }
+}
+```
 
-- 构建：`swift build`
-- 测试：`swift test`
-- 启动：`swift run InfoBarApp`
+`onOrderChanged` 现在直接调 `mountMenuBars(orderedIDs: newOrder)`，拖拽后 Menu Bar 即时响应。
 
-最新结果（本地）
-- `swift test`：`38 tests`，`0 failures`，`1 skipped`
-- `swift build`：通过
-- `swift run InfoBarApp`：可构建并启动（鉴权是否成功取决于本机浏览器 Cookie 是否包含 BigModel 可用 token）
+### 3.5 SVG 图标 isTemplate
 
-## 4. 关键测试
+所有 provider SVG（`codex`/`bigmodel` = fill:white 路径，在白底不可见）统一设 `image.isTemplate = true`：
+- 未选中行（白底）：渲染为深色
+- 选中行（蓝底）：AppKit 自动渲染为白色
 
-- `Tests/InfoBarTests/Modules/Quota/BigModelUsageClientTests.swift`
-  - `testThrowsMissingCredentialsWhenCookieUnavailable`
-  - `testDecodesQuotaPayloadAndMapsSnapshot`
-  - `testThrowsApiFailureWhenResponseIsNotSuccess`
-  - `testThrowsMissingUsageDataWhenLimitsEmpty`
-  - `testBigModelBrowserCookieImporterUsesReusableCollector`
-  - `testExtractsAuthorizationTokenFromCookieHeader`
-  - `testExtractsBigModelProductionTokenFromCookieHeader`
-- `Tests/InfoBarTests/Modules/Quota/QuotaProviderRegistryTests.swift`
-  - `testDefaultProvidersContainCodexZenMuxMiniMaxAndBigModel`
+影响位置：`ProviderRowView.configure` 和 `ProviderDetailViewController.makeHeader`。
 
-## 5. 当前风险与下轮建议（优先级）
+## 4. Bugfix 记录（本轮修复）
 
-1. BigModel 若浏览器 Cookie 中无可用 token（或 token key 变化）仍会出现鉴权失败，建议加开关日志仅输出“命中哪个 cookie key”，不打印敏感值。
-2. 目前 BigModel 默认走 `open.bigmodel.cn`，如果用户账号实际在 global 端，需通过 `Z_AI_API_HOST` / `Z_AI_QUOTA_URL` 覆盖。
-3. 建议补一条可控 live probe（环境变量开关）用于 BigModel 联调，减少本地误判。
+| # | 症状 | 根因 | 修复 |
+|---|------|------|------|
+| 1 | Panel 打开只显示标题栏 | `contentViewController = splitVC` 时 `preferredContentSize` 为 `.zero`，窗口折叠 | 赋值前设 `splitVC.preferredContentSize = NSSize(640, 440)` |
+| 2 | codex/bigmodel 图标不可见 | SVG fill:white，白底透明 | `image.isTemplate = true` |
+| 3 | 右侧 detail 布局溢出（progress bar 超出右边界） | `edgeInsets(20,20,20,20)` + `row.width = container.width` 导致 row 宽出 40px | padding 改为 anchor constant，`edgeInsets` 清零 |
+
+## 5. 测试状态
+
+- `swift test`：**63 passed, 0 failures, 1 skipped**
+- `swift build`：**Build complete**
+
+新增测试（本轮）：
+- `SettingsProviderViewModelTests.testWindowsArePopulatedFromSnapshot`
+- `SettingsProviderViewModelTests.testFetchedAtIsSet`
+
+## 6. 公开 API（未变）
+
+```swift
+// SettingsWindowController
+show()
+update(viewModels: [SettingsProviderViewModel])
+onVisibilityChanged: ((String, Bool) -> Void)?
+onOrderChanged: (([String]) -> Void)?
+window: NSPanel?
+viewModels: [SettingsProviderViewModel]
+
+// MenuBarController（新增）
+stop()
+```
+
+## 7. 下轮建议
+
+### 优先级高
+- **Step 2.4 手动刷新**：detail 右上角加刷新按钮，触发该 provider 单次立即 fetch。需 `QuotaModule` 暴露 `triggerRead()` 或 `QuotaReader.readNow()`。
+
+### 优先级中
+- **Menu Bar 顺序方向校验**：当前用 `orderedIDs.reversed()` 假设 NSStatusBar 新 item 出现最左。如实测方向相反，删除 `.reversed()` 即可。
+- **初始无数据状态**：provider 首次 fetch 前，detail 右侧 USAGE 区为空，考虑显示 loading placeholder。
+
+### 优先级低
+- **NSStatusItem 可见性 vs 顺序**：隐藏的 provider 仍在 fetch（预期行为）；remount 时隐藏 item 会短暂出现再隐藏，极低概率可见。
+
+## 8. 关键文件索引
+
+| 文件 | 职责 |
+|------|------|
+| `Sources/InfoBar/UI/Settings/SettingsWindowController.swift` | 全部 Settings UI（Panel + List + Detail） |
+| `Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift` | 设置面板数据模型 |
+| `Sources/InfoBar/UI/Settings/ProviderOrderStore.swift` | 顺序持久化 |
+| `Sources/InfoBar/UI/Settings/ProviderVisibilityStore.swift` | 可见性持久化 |
+| `Sources/InfoBar/UI/MenuBar/MenuBarController.swift` | NSStatusItem 生命周期（含 stop()） |
+| `Sources/InfoBarApp/main.swift` | 两阶段启动 + mountMenuBars |
+| `Tests/InfoBarTests/UI/Settings/` | Settings 相关测试 |
