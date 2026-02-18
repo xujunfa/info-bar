@@ -21,6 +21,9 @@ public enum QuotaProviderRegistry {
             },
             QuotaProviderRegistration(id: "minimax") {
                 MiniMaxUsageClient()
+            },
+            QuotaProviderRegistration(id: "bigmodel") {
+                BigModelUsageClient()
             }
         ]
     }
