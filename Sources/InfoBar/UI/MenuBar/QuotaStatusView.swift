@@ -21,6 +21,9 @@ final class QuotaStatusView: NSView {
         NSSize(width: QuotaLayoutMetrics.statusWidth, height: QuotaLayoutMetrics.statusHeight)
     }
 
+    // Let all mouse events pass through to the underlying NSStatusBarButton.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
     func update(model: QuotaDisplayModel) {
         guard self.model != model else { return }
         self.model = model
