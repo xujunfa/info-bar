@@ -54,11 +54,11 @@ final class BigModelUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.providerID, "bigmodel")
         XCTAssertEqual(snapshot.windows.count, 2)
         XCTAssertEqual(snapshot.windows[0].id, "tokens_limit")
-        XCTAssertEqual(snapshot.windows[0].label, "T")
+        XCTAssertEqual(snapshot.windows[0].label, "H")
         XCTAssertEqual(snapshot.windows[0].usedPercent, 25)
         XCTAssertEqual(snapshot.windows[0].resetAt, Date(timeIntervalSince1970: 1_768_000_000))
         XCTAssertEqual(snapshot.windows[1].id, "time_limit")
-        XCTAssertEqual(snapshot.windows[1].label, "M")
+        XCTAssertEqual(snapshot.windows[1].label, "W")
         XCTAssertEqual(snapshot.windows[1].usedPercent, 0)
         XCTAssertEqual(snapshot.windows[1].resetAt, Date(timeIntervalSince1970: 1_768_600_000))
     }

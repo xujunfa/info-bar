@@ -8,6 +8,7 @@ public final class SettingsWindowController {
     public private(set) var viewModels: [SettingsProviderViewModel] = []
     public var onVisibilityChanged: ((String, Bool) -> Void)?
     public var onOrderChanged: (([String]) -> Void)?
+    public var onRefreshRequested: ((String) -> Void)?
 
     private weak var listVC: ProviderListViewController?
     private weak var detailVC: ProviderDetailViewController?
@@ -43,6 +44,9 @@ public final class SettingsWindowController {
         }
         detailVC?.onVisibilityChanged = { [weak self] id, visible in
             self?.onVisibilityChanged?(id, visible)
+        }
+        detailVC?.onRefreshRequested = { [weak self] id in
+            self?.onRefreshRequested?(id)
         }
     }
 
@@ -98,6 +102,21 @@ private final class ToggleSwitchBridge: NSObject {
 
     @objc func toggled(_ sender: NSSwitch) {
         handler(providerID, sender.state == .on)
+    }
+}
+
+@MainActor
+private final class RefreshButtonBridge: NSObject {
+    let providerID: String
+    let handler: (String) -> Void
+
+    init(providerID: String, handler: @escaping (String) -> Void) {
+        self.providerID = providerID
+        self.handler = handler
+    }
+
+    @objc func refreshClicked(_ sender: NSButton) {
+        handler(providerID)
     }
 }
 
@@ -324,7 +343,9 @@ private final class ProviderRowView: NSTableCellView {
 
 private final class ProviderDetailViewController: NSViewController {
     var onVisibilityChanged: ((String, Bool) -> Void)?
+    var onRefreshRequested: ((String) -> Void)?
     private var toggleBridge: ToggleSwitchBridge?
+    private var refreshBridge: RefreshButtonBridge?
 
     override func loadView() {
         view = NSView()
@@ -334,6 +355,7 @@ private final class ProviderDetailViewController: NSViewController {
         // Remove all existing subviews
         view.subviews.forEach { $0.removeFromSuperview() }
         toggleBridge = nil
+        refreshBridge = nil
 
         guard let vm = viewModel else {
             let label = NSTextField(labelWithString: "Select a provider")
@@ -450,7 +472,24 @@ private final class ProviderDetailViewController: NSViewController {
         titleStack.alignment = .leading
         titleStack.spacing = 2
 
-        let headerStack = NSStackView(views: [iconView, titleStack])
+        let refreshButton = NSButton(title: "Refresh", target: nil, action: nil)
+        refreshButton.bezelStyle = .rounded
+        refreshButton.controlSize = .small
+
+        let bridge = RefreshButtonBridge(providerID: vm.providerID) { [weak self] id in
+            self?.onRefreshRequested?(id)
+        }
+        refreshButton.target = bridge
+        refreshButton.action = #selector(RefreshButtonBridge.refreshClicked(_:))
+        refreshBridge = bridge
+
+        refreshButton.setContentHuggingPriority(.required, for: .horizontal)
+        refreshButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let headerStack = NSStackView(views: [iconView, titleStack, spacer, refreshButton])
         headerStack.orientation = .horizontal
         headerStack.alignment = .centerY
         headerStack.spacing = 12

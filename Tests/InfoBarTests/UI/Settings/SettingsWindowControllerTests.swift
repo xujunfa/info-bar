@@ -48,4 +48,12 @@ final class SettingsWindowControllerTests: XCTestCase {
         sut.onOrderChanged?(["bigmodel", "codex"])
         XCTAssertEqual(receivedOrder, ["bigmodel", "codex"])
     }
+
+    func testOnRefreshRequestedCallbackIsFired() {
+        let sut = SettingsWindowController()
+        var receivedProviderID: String?
+        sut.onRefreshRequested = { id in receivedProviderID = id }
+        sut.onRefreshRequested?("codex")
+        XCTAssertEqual(receivedProviderID, "codex")
+    }
 }

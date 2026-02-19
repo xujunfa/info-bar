@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarsByID: [String: MenuBarController] = [:]
     private var quotaWidgets: [QuotaWidget] = []
     private var quotaModules: [QuotaModule] = []
+    private var quotaModulesByID: [String: QuotaModule] = [:]
     private let settingsWindowController = SettingsWindowController()
     private let visibilityStore = ProviderVisibilityStore()
     private let orderStore = ProviderOrderStore()
@@ -45,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menuBarsByID[provider.id] = menuBar
             quotaWidgets.append(widget)
             quotaModules.append(module)
+            quotaModulesByID[provider.id] = module
         }
 
         // Phase 2: mount status items in stored order so the menu bar matches settings.
@@ -54,7 +56,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController.onVisibilityChanged = { [weak self] providerID, isVisible in
             guard let self else { return }
             self.visibilityStore.setVisible(isVisible, providerID: providerID)
-            self.menuBarsByID[providerID]?.setVisible(isVisible)
+            // Re-mount using persisted order so hide/show never reorders menu bar items.
+            let orderedIDs = self.orderStore.orderedIDs(defaultIDs: defaultIDs)
+            self.mountMenuBars(orderedIDs: orderedIDs)
             self.pushSnapshotsToSettings(defaultIDs: defaultIDs)
         }
 
@@ -63,6 +67,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.orderStore.setOrder(newOrder)
             self.mountMenuBars(orderedIDs: newOrder)
             self.pushSnapshotsToSettings(defaultIDs: defaultIDs)
+        }
+
+        settingsWindowController.onRefreshRequested = { [weak self] providerID in
+            self?.quotaModulesByID[providerID]?.refresh()
         }
 
         pushSnapshotsToSettings(defaultIDs: defaultIDs)
