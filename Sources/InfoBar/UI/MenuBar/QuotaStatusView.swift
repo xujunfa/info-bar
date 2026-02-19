@@ -35,13 +35,15 @@ final class QuotaStatusView: NSView {
 
         drawIcon()
 
+        let textColor = color(for: model.state)
+
         let topAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold),
-            .foregroundColor: NSColor.labelColor
+            .foregroundColor: textColor
         ]
         let bottomAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .regular),
-            .foregroundColor: color(for: model.state)
+            .foregroundColor: textColor
         ]
 
         model.topLine.draw(
@@ -91,7 +93,7 @@ final class QuotaStatusView: NSView {
 
     private func color(for state: QuotaDisplayModel.State) -> NSColor {
         switch state {
-        case .normal: return NSColor.systemGreen
+        case .normal: return NSColor.labelColor
         case .warning: return NSColor.systemOrange
         case .critical: return NSColor.systemRed
         case .unknown: return NSColor.systemGray

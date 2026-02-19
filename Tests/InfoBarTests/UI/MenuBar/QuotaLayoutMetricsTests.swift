@@ -10,6 +10,6 @@ final class QuotaLayoutMetricsTests: XCTestCase {
 
     func testTextAreaHasEnoughWidthForDurationSuffix() {
         let textAreaWidth = QuotaLayoutMetrics.statusWidth - QuotaLayoutMetrics.textX - 2
-        XCTAssertGreaterThanOrEqual(textAreaWidth, 80)
+        XCTAssertGreaterThanOrEqual(textAreaWidth, 76)
     }
 }

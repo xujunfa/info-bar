@@ -24,6 +24,10 @@ public final class QuotaModule: Module {
         reader.stop()
     }
 
+    public func refresh() {
+        reader.read()
+    }
+
     private func loadCallback(_ snapshot: QuotaSnapshot?) {
         self.widgets.filter { $0.isActive }.forEach { $0.setSnapshot(snapshot) }
     }

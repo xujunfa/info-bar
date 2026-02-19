@@ -137,7 +137,7 @@ struct BigModelUsageClient: QuotaSnapshotFetching {
         if let tokenLimit = limits.first(where: { $0.type == "TOKENS_LIMIT" }) {
             windows.append(QuotaWindow(
                 id: "tokens_limit",
-                label: "T",
+                label: "H",
                 usedPercent: usedPercent(limit: tokenLimit),
                 resetAt: resetAt(limit: tokenLimit, fetchedAt: fetchedAt)
             ))
@@ -145,7 +145,7 @@ struct BigModelUsageClient: QuotaSnapshotFetching {
         if let timeLimit = limits.first(where: { $0.type == "TIME_LIMIT" }) {
             windows.append(QuotaWindow(
                 id: "time_limit",
-                label: "M",
+                label: "W",
                 usedPercent: usedPercent(limit: timeLimit),
                 resetAt: resetAt(limit: timeLimit, fetchedAt: fetchedAt)
             ))

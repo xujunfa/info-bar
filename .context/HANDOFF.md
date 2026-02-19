@@ -3,149 +3,114 @@
 ## 0. 归档记录
 
 - 本轮前版本已归档到：
-  - `.context/archive/HANDOFF-2026-02-19-settings-redesign-v1.md`
-- 更早版本见各 archive 文件
+  - `.context/archive/HANDOFF-2026-02-19-pace-and-refresh-before-update.md`
+- 更早版本见 `.context/archive/`。
 
 ## 1. 当前状态（已完成 & 已验证）
 
-- 四个 Provider 正常运行：`codex`、`zenmux`、`minimax`、`bigmodel`
-- **Settings UI Redesign 完成**：macOS split-pane 风格，拖拽重排、即时反映到 Menu Bar
-- **三个 UI Bugfix 完成**：Panel 高度折叠、图标不可见、右侧 detail 布局溢出
+- Provider 已接入：`codex`、`zenmux`、`minimax`、`bigmodel`
+- Menu Bar 两行顺序已固定为：`W` 在上、`H` 在下
+- Settings 已支持：
+  - 拖拽排序（即时生效）
+  - 显示/隐藏切换（保持原顺序）
+  - 手动刷新当前 provider（Refresh 按钮）
+- 配额颜色已切到 Pace 驱动（不是单纯 usedPercent 驱动）
 
-## 2. 架构速览
+## 2. 本轮关键变更
 
-```
-AppDelegate (main.swift)
-  ├── QuotaProviderRegistry.defaultProviders()
-  ├── [MenuBarController]  — NSStatusItem × N，order 由 ProviderOrderStore 驱动
-  ├── [QuotaModule]        — Reader + Widget，独立 fetch 循环
-  ├── SettingsWindowController (NSPanel 640×440)
-  │     ├── ProviderListViewController   — NSTableView + DnD
-  │     └── ProviderDetailViewController — header + progress bars + NSSwitch
-  ├── ProviderVisibilityStore  — UserDefaults "InfoBar.providerVisibility"
-  └── ProviderOrderStore       — UserDefaults "InfoBar.providerOrder"
-```
+### 2.1 Provider & 图标/布局修复
 
-## 3. 本轮关键变更
+- BigModel 标签映射改为 `H/W`，避免显示 `T/M`
+  - `Sources/InfoBar/Modules/Quota/BigModelUsageClient.swift`
+  - `Tests/InfoBarTests/Modules/Quota/BigModelUsageClientTests.swift`
+- `minimax.svg` 资源改成与其他 icon 一致风格（`fill="white"`）
+  - `Sources/InfoBar/Resources/Icons/minimax.svg`
+- Menu 项间距收紧（statusWidth 104 -> 100）
+  - `Sources/InfoBar/UI/MenuBar/QuotaLayoutMetrics.swift`
+  - `Tests/InfoBarTests/UI/MenuBar/QuotaLayoutMetricsTests.swift`
 
-### 3.1 SettingsProviderViewModel 扩展
+### 2.2 H/W 渲染与顺序语义
 
-| 新字段 | 说明 |
-|--------|------|
-| `WindowViewModel` (nested struct) | `label`, `usedPercent`, `timeLeft`（"2d"/"3h"/"45m"/"—"） |
-| `windows: [WindowViewModel]` | 从 `snapshot.windows` 映射；`resetAt` → `timeLeft` |
-| `fetchedAt: Date?` | 直接从 `snapshot.fetchedAt` 透传 |
-| `summary: String` | 保留，向后兼容 |
+- `QuotaDisplayModel` 从“按数组位置渲染”改为“识别 H/W 语义后固定行位”
+- 当前规则：`top = W`，`bottom = H`
+- 缺失 H 时：显示 `H: -- --`，不再把 W 顶到 H 行
+  - `Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
+  - `Tests/InfoBarTests/Modules/Quota/QuotaDisplayModelTests.swift`
 
-### 3.2 SettingsWindowController 完全重写
+### 2.3 设置页刷新能力
 
-**结构**
-- NSPanel 640×440，`titled + closable + nonactivatingPanel`
-- `preferredContentSize` 在赋值 `contentViewController` 前设置（否则 panel 折叠为标题栏）
-- NSSplitViewController：左 200px 固定 / 右 flexible
+- Settings 右侧 header 新增 `Refresh` 按钮
+- 新增回调链路：
+  - `SettingsWindowController.onRefreshRequested`
+  - `AppDelegate` 接线到 `quotaModulesByID[providerID]?.refresh()`
+  - `QuotaModule.refresh()` 触发单次 `reader.read()`
+- 相关文件：
+  - `Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+  - `Sources/InfoBarApp/main.swift`
+  - `Sources/InfoBar/Modules/Quota/QuotaModule.swift`
+  - `Tests/InfoBarTests/UI/Settings/SettingsWindowControllerTests.swift`
+  - `Tests/InfoBarTests/Modules/Quota/QuotaModuleTests.swift`
 
-**ProviderListViewController**
-- NSTableView，rowHeight 36，无 header
-- `ProviderRowView: NSTableCellView`：drag handle（`line.3.horizontal`）+ 20×20 icon（`isTemplate=true`）+ 13pt semibold name + 8px 状态点
-- Drag & Drop：`NSPasteboardItem` 写 row index → `acceptDrop` 计算 `adjustedRow = fromRow < row ? row-1 : row` → `moveRow(at:to:)` 动画 → `onOrderChanged`
-- `reload(viewModels:)` 按 providerID 恢复选中行
+### 2.4 顺序漂移修复
 
-**ProviderDetailViewController**
-- 无选中：居中显示 "Select a provider"
-- 有选中：header（40×40 icon + 18pt bold name + "Updated: Xm ago"）→ divider → USAGE 区（`NSProgressIndicator.small` + "XX%" + "(Xd left)"）→ divider → Show in menu bar（`NSSwitch` via `@MainActor ToggleSwitchBridge`）
-- 每次 `configure(viewModel:)` 完全 rebuild subviews
-- **布局要点**：padding 放在 container 的 anchor offset（`constant: ±20`），不用 `edgeInsets`，使 `container.widthAnchor == 可用内容宽`，所有 `row.widthAnchor = container.widthAnchor` 精确成立
+- 修复“隐藏后再显示会跑到第一位”问题
+- 策略：`onVisibilityChanged` 时按 `orderStore` 全量 remount，保证顺序稳定
+  - `Sources/InfoBarApp/main.swift`
 
-### 3.3 MenuBarController.stop()
+### 2.5 Pace 颜色算法（当前生效）
 
-```swift
-public func stop() {
-    if let item {
-        NSStatusBar.system.removeStatusItem(item)
-        self.item = nil
-        self.actionBridge = nil
-    }
-}
-```
-`statusView`（含已有 snapshot 数据）由 controller 持有，remount 时直接复用。
+- 字体颜色由 `QuotaDisplayModel.State` 驱动，`QuotaStatusView` 上下两行同色：
+  - `normal = labelColor`
+  - `warning = systemOrange`
+  - `critical = systemRed`
+  - `unknown = systemGray`
+- Pace 核心：
+  - `elapsed = 1 - remain/duration`
+  - `expected = 0.8 * elapsed^1.1`
+  - `urgency = max(0, expected-used)/0.8 * (0.35 + 0.65 * elapsed^1.6)`
+- 当前阈值：
+  - `warningThreshold = 0.30`
+  - `criticalThreshold = 0.60`
+- 特殊规则：
+  - **若 W 缺失且 H 存在，则只按 H 计算 Pace 颜色**
+- 相关文件：
+  - `Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
+  - `Sources/InfoBar/UI/MenuBar/QuotaStatusView.swift`
+  - `Tests/InfoBarTests/Modules/Quota/QuotaDisplayModelTests.swift`
 
-### 3.4 main.swift — mountMenuBars(orderedIDs:)
+## 3. 当前测试状态
 
-**两阶段启动**：Phase 1 创建所有 module/widget（不调 `start()`），Phase 2 按 `orderStore.orderedIDs` 顺序 mount。
+- `swift test`：**71 passed, 0 failed, 1 skipped**
+- 新增测试：
+  - `QuotaModuleTests.testRefreshPushesLatestSnapshotToWidget`
+  - `QuotaDisplayModelTests` 中 Pace 与 H/W 行位相关用例（多条）
 
-```swift
-private func mountMenuBars(orderedIDs: [String]) {
-    // 停止所有现有 item
-    for id in menuBarsByID.keys { menuBarsByID[id]?.stop() }
-    // 倒序 mount：NSStatusBar 新 item 出现在最左侧
-    for id in orderedIDs.reversed() {
-        bar.start(); bar.setVisible(...); bar.update(snapshot: ...)
-    }
-}
-```
+## 4. 已知行为与注意事项
 
-`onOrderChanged` 现在直接调 `mountMenuBars(orderedIDs: newOrder)`，拖拽后 Menu Bar 即时响应。
+- Settings 面板仍是 `NSPanel + nonactivatingPanel`，因此 `Cmd+W` 关闭行为不是标准 app-window 路径
+- Pace 颜色目前是“提醒该用优先级”，不是“逼近 100% 用量”
+- Pace 仅使用窗口本身 `usedPercent/resetAt`，不依赖 provider 专用字段
 
-### 3.5 SVG 图标 isTemplate
+## 5. 下轮建议
 
-所有 provider SVG（`codex`/`bigmodel` = fill:white 路径，在白底不可见）统一设 `image.isTemplate = true`：
-- 未选中行（白底）：渲染为深色
-- 选中行（蓝底）：AppKit 自动渲染为白色
+### 高优先级
 
-影响位置：`ProviderRowView.configure` 和 `ProviderDetailViewController.makeHeader`。
+1. 为 Pace 增加用户可调参数（至少阈值/目标占比）：
+   - `targetUsage`（默认 0.8）
+   - `warning/critical` 阈值
+2. 处理 `Cmd+W` 关闭设置窗（需要调整 panel 激活/关闭路径）
 
-## 4. Bugfix 记录（本轮修复）
+### 中优先级
 
-| # | 症状 | 根因 | 修复 |
-|---|------|------|------|
-| 1 | Panel 打开只显示标题栏 | `contentViewController = splitVC` 时 `preferredContentSize` 为 `.zero`，窗口折叠 | 赋值前设 `splitVC.preferredContentSize = NSSize(640, 440)` |
-| 2 | codex/bigmodel 图标不可见 | SVG fill:white，白底透明 | `image.isTemplate = true` |
-| 3 | 右侧 detail 布局溢出（progress bar 超出右边界） | `edgeInsets(20,20,20,20)` + `row.width = container.width` 导致 row 宽出 40px | padding 改为 anchor constant，`edgeInsets` 清零 |
+1. 在 Settings 中展示 provider 的实时 Pace 分值（便于理解变色原因）
+2. Refresh 按钮增加短暂 loading 状态（防重复点击）
 
-## 5. 测试状态
+## 6. 关键文件索引
 
-- `swift test`：**63 passed, 0 failures, 1 skipped**
-- `swift build`：**Build complete**
-
-新增测试（本轮）：
-- `SettingsProviderViewModelTests.testWindowsArePopulatedFromSnapshot`
-- `SettingsProviderViewModelTests.testFetchedAtIsSet`
-
-## 6. 公开 API（未变）
-
-```swift
-// SettingsWindowController
-show()
-update(viewModels: [SettingsProviderViewModel])
-onVisibilityChanged: ((String, Bool) -> Void)?
-onOrderChanged: (([String]) -> Void)?
-window: NSPanel?
-viewModels: [SettingsProviderViewModel]
-
-// MenuBarController（新增）
-stop()
-```
-
-## 7. 下轮建议
-
-### 优先级高
-- **Step 2.4 手动刷新**：detail 右上角加刷新按钮，触发该 provider 单次立即 fetch。需 `QuotaModule` 暴露 `triggerRead()` 或 `QuotaReader.readNow()`。
-
-### 优先级中
-- **Menu Bar 顺序方向校验**：当前用 `orderedIDs.reversed()` 假设 NSStatusBar 新 item 出现最左。如实测方向相反，删除 `.reversed()` 即可。
-- **初始无数据状态**：provider 首次 fetch 前，detail 右侧 USAGE 区为空，考虑显示 loading placeholder。
-
-### 优先级低
-- **NSStatusItem 可见性 vs 顺序**：隐藏的 provider 仍在 fetch（预期行为）；remount 时隐藏 item 会短暂出现再隐藏，极低概率可见。
-
-## 8. 关键文件索引
-
-| 文件 | 职责 |
-|------|------|
-| `Sources/InfoBar/UI/Settings/SettingsWindowController.swift` | 全部 Settings UI（Panel + List + Detail） |
-| `Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift` | 设置面板数据模型 |
-| `Sources/InfoBar/UI/Settings/ProviderOrderStore.swift` | 顺序持久化 |
-| `Sources/InfoBar/UI/Settings/ProviderVisibilityStore.swift` | 可见性持久化 |
-| `Sources/InfoBar/UI/MenuBar/MenuBarController.swift` | NSStatusItem 生命周期（含 stop()） |
-| `Sources/InfoBarApp/main.swift` | 两阶段启动 + mountMenuBars |
-| `Tests/InfoBarTests/UI/Settings/` | Settings 相关测试 |
+- `Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
+- `Sources/InfoBar/UI/MenuBar/QuotaStatusView.swift`
+- `Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- `Sources/InfoBarApp/main.swift`
+- `Sources/InfoBar/Modules/Quota/QuotaModule.swift`
+- `Tests/InfoBarTests/Modules/Quota/QuotaDisplayModelTests.swift`
+- `Tests/InfoBarTests/Modules/Quota/QuotaModuleTests.swift`
