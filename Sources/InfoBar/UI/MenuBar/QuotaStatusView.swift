@@ -36,24 +36,33 @@ final class QuotaStatusView: NSView {
         drawIcon()
 
         let textColor = color(for: model.state)
+        let topFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        let bottomFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
+        let safeTextColor = textColor ?? NSColor.labelColor
+        
+        let pStyle = NSMutableParagraphStyle()
+        pStyle.lineBreakMode = .byTruncatingTail
+        pStyle.alignment = .left
 
-        let topAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold),
-            .foregroundColor: textColor
-        ]
-        let bottomAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .regular),
-            .foregroundColor: textColor
-        ]
-
-        model.topLine.draw(
-            in: NSRect(x: QuotaLayoutMetrics.textX, y: 11, width: bounds.width - QuotaLayoutMetrics.textX - 2, height: 10),
-            withAttributes: topAttributes
-        )
-        model.bottomLine.draw(
-            in: NSRect(x: QuotaLayoutMetrics.textX, y: 1, width: bounds.width - QuotaLayoutMetrics.textX - 2, height: 10),
-            withAttributes: bottomAttributes
-        )
+        if !model.topLine.isEmpty {
+            let topAttr = NSMutableAttributedString(string: model.topLine)
+            let fullRange = NSRect(x: QuotaLayoutMetrics.textX, y: 11, width: bounds.width - QuotaLayoutMetrics.textX - 2, height: 10)
+            let range = NSRange(location: 0, length: topAttr.length)
+            topAttr.addAttribute(.foregroundColor, value: safeTextColor, range: range)
+            topAttr.addAttribute(.paragraphStyle, value: pStyle, range: range)
+            if let f = topFont as NSFont? { topAttr.addAttribute(.font, value: f, range: range) }
+            topAttr.draw(in: fullRange)
+        }
+        
+        if !model.bottomLine.isEmpty {
+            let botAttr = NSMutableAttributedString(string: model.bottomLine)
+            let fullRange = NSRect(x: QuotaLayoutMetrics.textX, y: 1, width: bounds.width - QuotaLayoutMetrics.textX - 2, height: 10)
+            let range = NSRange(location: 0, length: botAttr.length)
+            botAttr.addAttribute(.foregroundColor, value: safeTextColor, range: range)
+            botAttr.addAttribute(.paragraphStyle, value: pStyle, range: range)
+            if let f = bottomFont as NSFont? { botAttr.addAttribute(.font, value: f, range: range) }
+            botAttr.draw(in: fullRange)
+        }
     }
 
     private func drawIcon() {
