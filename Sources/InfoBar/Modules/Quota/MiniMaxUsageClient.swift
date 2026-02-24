@@ -63,7 +63,7 @@ struct MiniMaxUsageClient: QuotaSnapshotFetching {
     func fetchSnapshot() throws -> QuotaSnapshot {
         let groupID = resolveGroupID(environment: environment)
         var components = URLComponents(string: resolveUsageURL(environment: environment))!
-        components.queryItems = [URLQueryItem(name: "GroupId", value: groupID)]
+        components.queryItems = [URLQueryItem(name: "groupId", value: groupID)]
 
         guard let url = components.url else {
             throw MiniMaxUsageClientError.invalidResponse
