@@ -1,9 +1,9 @@
-# Info Bar Handoff (2026-02-24)
+# Info Bar Handoff (2026-02-19)
 
 ## 0. 归档记录
 
 - 本轮前版本已归档到：
-  - `.context/archive/HANDOFF-2026-02-19-pace-and-refresh.md`
+  - `.context/archive/HANDOFF-2026-02-19-pace-and-refresh-before-update.md`
 - 更早版本见 `.context/archive/`。
 
 ## 1. 当前状态（已完成 & 已验证）
@@ -15,7 +15,6 @@
   - 显示/隐藏切换（保持原顺序）
   - 手动刷新当前 provider（Refresh 按钮）
 - 配额颜色已切到 Pace 驱动（不是单纯 usedPercent 驱动）
-- `QuotaStatusView.draw()` 已加固：文本截断 + 可选色安全处理
 
 ## 2. 本轮关键变更
 
@@ -32,7 +31,7 @@
 
 ### 2.2 H/W 渲染与顺序语义
 
-- `QuotaDisplayModel` 从"按数组位置渲染"改为"识别 H/W 语义后固定行位"
+- `QuotaDisplayModel` 从“按数组位置渲染”改为“识别 H/W 语义后固定行位”
 - 当前规则：`top = W`，`bottom = H`
 - 缺失 H 时：显示 `H: -- --`，不再把 W 顶到 H 行
   - `Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
@@ -54,7 +53,7 @@
 
 ### 2.4 顺序漂移修复
 
-- 修复"隐藏后再显示会跑到第一位"问题
+- 修复“隐藏后再显示会跑到第一位”问题
 - 策略：`onVisibilityChanged` 时按 `orderStore` 全量 remount，保证顺序稳定
   - `Sources/InfoBarApp/main.swift`
 
@@ -79,38 +78,27 @@
   - `Sources/InfoBar/UI/MenuBar/QuotaStatusView.swift`
   - `Tests/InfoBarTests/Modules/Quota/QuotaDisplayModelTests.swift`
 
-### 2.6 QuotaStatusView 绘制健壮性修复（2026-02-24）
-
-- MiniMax API 查询参数大小写修正：`GroupId` → `groupId`
-  - `Sources/InfoBar/Modules/Quota/MiniMaxUsageClient.swift`
-- `QuotaStatusView.draw()` 改用 `NSMutableAttributedString`：
-  - 加 `NSParagraphStyle`（`lineBreakMode = .byTruncatingTail`），防止文本超出绘制区域
-  - 修复 `textColor` 为可选时的潜在崩溃，回退到 `NSColor.labelColor`
-  - `Sources/InfoBar/UI/MenuBar/QuotaStatusView.swift`
-- 新增防回归测试：
-  - `Tests/InfoBarTests/QuotaStatusViewDrawingTests.swift`
-  - 验证 `draw()` 在只有 H 窗口时不崩溃
-
 ## 3. 当前测试状态
 
-- `swift test`：**待验证**（新增 1 个测试，变更未提交）
-- 上轮基准：71 passed, 0 failed, 1 skipped
+- `swift test`：**71 passed, 0 failed, 1 skipped**
+- 新增测试：
+  - `QuotaModuleTests.testRefreshPushesLatestSnapshotToWidget`
+  - `QuotaDisplayModelTests` 中 Pace 与 H/W 行位相关用例（多条）
 
 ## 4. 已知行为与注意事项
 
 - Settings 面板仍是 `NSPanel + nonactivatingPanel`，因此 `Cmd+W` 关闭行为不是标准 app-window 路径
-- Pace 颜色目前是"提醒该用优先级"，不是"逼近 100% 用量"
+- Pace 颜色目前是“提醒该用优先级”，不是“逼近 100% 用量”
 - Pace 仅使用窗口本身 `usedPercent/resetAt`，不依赖 provider 专用字段
 
 ## 5. 下轮建议
 
 ### 高优先级
 
-1. 提交本轮变更（MiniMax 参数修正 + QuotaStatusView 绘制加固 + 测试）
-2. 为 Pace 增加用户可调参数（至少阈值/目标占比）：
+1. 为 Pace 增加用户可调参数（至少阈值/目标占比）：
    - `targetUsage`（默认 0.8）
    - `warning/critical` 阈值
-3. 处理 `Cmd+W` 关闭设置窗（需要调整 panel 激活/关闭路径）
+2. 处理 `Cmd+W` 关闭设置窗（需要调整 panel 激活/关闭路径）
 
 ### 中优先级
 
@@ -124,7 +112,5 @@
 - `Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
 - `Sources/InfoBarApp/main.swift`
 - `Sources/InfoBar/Modules/Quota/QuotaModule.swift`
-- `Sources/InfoBar/Modules/Quota/MiniMaxUsageClient.swift`
 - `Tests/InfoBarTests/Modules/Quota/QuotaDisplayModelTests.swift`
 - `Tests/InfoBarTests/Modules/Quota/QuotaModuleTests.swift`
-- `Tests/InfoBarTests/QuotaStatusViewDrawingTests.swift`
