@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 
+// Trivial update to QuotaStatusView
 final class QuotaStatusView: NSView {
     private var model = QuotaDisplayModel(snapshot: nil)
     private let fallbackSymbolName = "chevron.left.forwardslash.chevron.right"
