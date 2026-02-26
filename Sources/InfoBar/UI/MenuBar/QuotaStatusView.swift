@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-// Trivial update to QuotaStatusView
+// QuotaStatusView: Custom menu bar view for displaying quota information
 final class QuotaStatusView: NSView {
     private var model = QuotaDisplayModel(snapshot: nil)
     private let fallbackSymbolName = "chevron.left.forwardslash.chevron.right"
