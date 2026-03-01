@@ -2,136 +2,138 @@
 
 ## 概览
 
-- 项目：Info Bar（Web Connector + Supabase 集成子项目）
+- 项目：InfoBar 设置页 UI 优化与 Usage 信息增强
 - 里程碑总数：5
-- 创建日期：2026-03-01
+- 创建日期：2026-03-02
 - 最近更新：2026-03-02
-- 当前执行阶段：里程碑 3
-- 参考文档：`.context/DESIGN.md`（总体设计）、`.context/archive/IMPLEMENTATION_PLAN-2026-03-02-pre-workflow-migration.md`（迁移前详版）
+- 当前执行阶段：里程碑 2
+- 参考文档：`.context/DESIGN.md`（总体设计）、`.context/archive/HANDOFF-2026-02-19-settings-redesign-v1.md`（现有设置页实现背景）
 
 ---
 
-## 里程碑 1：Extension 采集链路（方式 A）
+## 里程碑 1：设置页视觉系统升级
 
-**目标**：在 Factory 页面稳定捕获 usage 接口并传入 service worker。
+**目标**：将现有设置页升级为更具层次感和信息密度的 macOS 风格界面，建立可复用的视觉规范。
 
 ### 任务
 
-- [x] 1.1 创建 MV3 扩展骨架与最小权限 manifest
-  - 文件：`extensions/info-bar-web-connector/manifest.json`
-- [x] 1.2 在 MAIN world 注入 page script，hook `fetch` + `XMLHttpRequest`
-  - 文件：`extensions/info-bar-web-connector/src/page/factory-hook.js`
-- [x] 1.3 打通消息链路（page -> content -> background）
-  - 文件：`extensions/info-bar-web-connector/src/content/bridge.js`、`extensions/info-bar-web-connector/src/background/service-worker.js`
-- [x] 1.4 落地 Factory usage 抓取规则
-  - 文件：`extensions/info-bar-web-connector/src/shared/contracts.js`
-- [x] 1.5 完成扩展侧调试与本地加载说明
-  - 文件：`extensions/info-bar-web-connector/README.md`
+- [x] 1.1 抽取设置页主题 Token（颜色、间距、圆角、字号、阴影、状态色）
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsTheme.swift`（新增）、`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- [x] 1.2 重构 Panel 与 SplitView 的基础视觉（尺寸、背景材质、分割线、边距）
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- [x] 1.3 升级左侧 Provider 列表行样式（选中态、悬停态、状态点可读性、拖拽提示）
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- [x] 1.4 升级右侧空状态/无数据状态（引导文案 + 占位样式），避免信息断层
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- [x] 1.5 为设置页基础视觉行为补齐回归测试（窗口参数、数据更新后状态稳定）
+  - 文件：`Tests/InfoBarTests/UI/Settings/SettingsWindowControllerTests.swift`
 
 ### 验收标准
 
-- 能在 `https://app.factory.ai/*` 捕获 usage 响应。
-- Service worker 可以稳定收到结构化消息并输出调试日志。
-- 非白名单域不注入脚本。
+- 设置页在 640x440 与更大尺寸下保持层级清晰、间距一致。
+- 左右区域视觉风格统一，交互态（选中/悬停/禁用）有明确反馈。
+- 无选择/无数据时不再出现“空白断层”，有可理解占位信息。
 
 ---
 
-## 里程碑 2：标准化、持久化与 Supabase 集成
+## 里程碑 2：Usage 信息模型扩展
 
-**目标**：采集结果可去重落盘并同步到 Supabase，Mac App 可从 Supabase 读取 factory 快照。
+**目标**：将当前仅支持百分比的窗口模型扩展为可承载更多 usage 维度的数据结构。
 
 ### 任务
 
-- [x] 2.1 定义通用 Envelope 契约与 provider/rule 注册
-  - 文件：`extensions/info-bar-web-connector/src/shared/contracts.js`
-- [x] 2.2 实现 service worker 去重、local 持久化与兼容旧 key
-  - 文件：`extensions/info-bar-web-connector/src/background/service-worker.js`
-- [x] 2.3 创建 `connector_events` migration + RLS policy
-  - 文件：`extensions/info-bar-web-connector/supabase/migrations/20260301_create_connector_events.sql`
-- [x] 2.4 接入 Supabase sink 写入与 read-back 缓存
-  - 文件：`extensions/info-bar-web-connector/src/background/service-worker.js`
-- [x] 2.5 将 Mac App `factory` provider 切换为 Supabase 读取
-  - 文件：`Sources/InfoBar/Modules/Quota/SupabaseConnectorEventClient.swift`、`Sources/InfoBar/Modules/Quota/FactoryUsageClient.swift`
-- [x] 2.6 配置模式切换为 `config.example.json` + `config.local.json`
-  - 文件：`config.example.json`、`config.local.json`、`extensions/info-bar-web-connector/config.example.json`
+- [ ] 2.1 扩展 `QuotaWindow` 结构，新增可选字段（used、limit、remaining、unit、windowTitle、metadata）
+  - 文件：`Sources/InfoBar/Modules/Quota/QuotaSnapshot.swift`
+- [ ] 2.2 保持现有调用方兼容，完善默认值与边界处理（nil/负值/超限）
+  - 文件：`Sources/InfoBar/Modules/Quota/QuotaSnapshot.swift`、`Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
+- [ ] 2.3 扩展 `SettingsProviderViewModel.WindowViewModel`，支持展示“百分比 + 绝对值 + 单位 + 重置信息”
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`
+- [ ] 2.4 增加统一格式化工具（大数缩写、单位拼接、空值降级文案）
+  - 文件：`Sources/InfoBar/UI/Settings/UsageFormatting.swift`（新增）、`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`
+- [ ] 2.5 更新模型测试覆盖新字段映射与格式化输出
+  - 文件：`Tests/InfoBarTests/Modules/Quota/QuotaSnapshotTests.swift`、`Tests/InfoBarTests/UI/Settings/SettingsProviderViewModelTests.swift`
 
 ### 验收标准
 
-- 本地可看到 `connector_snapshots` 与 `connector_remote_snapshots`。
-- Supabase 表 `public.connector_events` 可查询到最新 factory usage 事件。
-- Mac App 工厂配额读取链路不再依赖原 Factory API 鉴权。
+- `QuotaWindow` 能表达“百分比 + 绝对值 + 单位 + 周期”信息且不破坏现有路径。
+- ViewModel 在字段缺失/半缺失情况下仍能输出稳定、可读文案。
+- 现有菜单栏显示逻辑无行为回归。
 
 ---
 
-## 里程碑 3：Mac App Connector Event Client 抽象（当前）
+## 里程碑 3：Provider Usage 映射增强
 
-**目标**：将现有 Factory 专用映射抽象为可复用结构，降低接入新 provider 的重复代码。
+**目标**：按各 Provider 实际返回能力，尽可能提取更多 usage 信息并写入扩展模型。
 
 ### 任务
 
-- [ ] 3.1 设计通用的 Connector Event -> `QuotaSnapshot` 映射接口
-  - 文件：`Sources/InfoBar/Modules/Quota/SupabaseConnectorEventClient.swift`（必要时新增 `Sources/InfoBar/Modules/Quota/ConnectorEventSnapshotMapper.swift`）
-- [ ] 3.2 重构 `FactoryUsageClient` 使用通用抽象，保留兼容行为
-  - 文件：`Sources/InfoBar/Modules/Quota/FactoryUsageClient.swift`
-- [ ] 3.3 为通用抽象补齐单元测试（成功路径、空数据、鉴权失败、占位配置）
-  - 文件：`Tests/InfoBarTests/Modules/Quota/FactoryUsageClientTests.swift`（必要时新增测试文件）
-- [ ] 3.4 更新 Provider 注册/依赖注入以支持后续多 provider
-  - 文件：`Sources/InfoBar/Modules/Quota/QuotaProviderRegistry.swift`、`Sources/InfoBarApp/main.swift`
-- [ ] 3.5 更新开发文档中的抽象约束与扩展步骤
-  - 文件：`extensions/info-bar-web-connector/README.md`、`docs/`（如需新增）
+- [ ] 3.1 增强 Codex 映射，补充可推导字段并明确字段缺失时策略
+  - 文件：`Sources/InfoBar/Modules/Quota/CodexUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/CodexUsageClientTests.swift`
+- [ ] 3.2 增强 MiniMax 映射，输出 total/used/remaining 与周期信息
+  - 文件：`Sources/InfoBar/Modules/Quota/MiniMaxUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/MiniMaxUsageClientTests.swift`
+- [ ] 3.3 增强 BigModel 映射，覆盖 tokens/time 两类窗口的详细字段
+  - 文件：`Sources/InfoBar/Modules/Quota/BigModelUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/BigModelUsageClientTests.swift`
+- [ ] 3.4 增强 ZenMux 映射，尽量解析数组/对象两种 payload 下的补充字段
+  - 文件：`Sources/InfoBar/Modules/Quota/ZenMuxUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/ZenMuxUsageClientTests.swift`
+- [ ] 3.5 增强 Factory 映射，输出月度 token 维度的 used/limit/remaining 与 resetAt
+  - 文件：`Sources/InfoBar/Modules/Quota/FactoryUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/FactoryUsageClientTests.swift`
+- [ ] 3.6 对 Supabase Connector 读取链路补充字段稳定性测试（空记录、字段缺失、格式变化）
+  - 文件：`Sources/InfoBar/Modules/Quota/SupabaseConnectorEventClient.swift`、`Tests/InfoBarTests/Modules/Quota/FactoryUsageClientTests.swift`
 
 ### 验收标准
 
-- 新增 provider 时无需复制整套 Supabase 请求与解析流程。
-- 现有 factory 行为与测试结果保持一致或更稳健。
-- 抽象层具备明确的输入输出与错误语义。
+- 五个 provider 的 snapshot 映射都能输出“可获取到的最大 usage 信息”。
+- 字段缺失时按降级策略回退，不抛出无谓错误、不影响刷新链路。
+- 所有 provider 映射测试通过。
 
 ---
 
-## 里程碑 4：第二个 Provider 的 Extension 采集复用验证
+## 里程碑 4：设置页信息呈现重构
 
-**目标**：在不破坏 Factory 的前提下，为第二 provider 落地捕获规则并打通端到端链路。
+**目标**：基于扩展后的 usage 数据，重构设置页详情区与列表摘要，显著提升信息丰富度和可读性。
 
 ### 任务
 
-- [ ] 4.1 在扩展契约中新增第二 provider 配置（host/rule/refresh）
-  - 文件：`extensions/info-bar-web-connector/src/shared/contracts.js`
-- [ ] 4.2 更新 manifest 白名单与注入范围（最小权限）
-  - 文件：`extensions/info-bar-web-connector/manifest.json`
-- [ ] 4.3 实现并验证新 provider 的 page/content/background 捕获链路
-  - 文件：`extensions/info-bar-web-connector/src/page/*.js`、`extensions/info-bar-web-connector/src/content/bridge.js`、`extensions/info-bar-web-connector/src/background/service-worker.js`
-- [ ] 4.4 在 Mac App 侧接入对应 `UsageClient`（复用里程碑 3 抽象）
-  - 文件：`Sources/InfoBar/Modules/Quota/*UsageClient.swift`、`Sources/InfoBar/Modules/Quota/QuotaProviderRegistry.swift`
-- [ ] 4.5 增加最小回归测试与手工验证脚本
-  - 文件：`Tests/InfoBarTests/Modules/Quota/*`、`extensions/info-bar-web-connector/README.md`
+- [ ] 4.1 重构右侧 Header（Provider 标识、更新时间、刷新动作、状态标识）
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- [ ] 4.2 将 Usage 区升级为信息卡（进度条 + used/remaining/limit + 单位 + reset）
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- [ ] 4.3 增加窗口级补充信息展示（如模型/窗口类型/数据来源字段）
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`、`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
+- [ ] 4.4 升级左侧列表摘要（主标题 + 次要 usage 摘要 + 可见性状态）
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`、`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`
+- [ ] 4.5 保持现有交互能力（拖拽排序、显示开关、手动刷新）并修复潜在 UI 回归
+  - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`、`Sources/InfoBarApp/main.swift`
+- [ ] 4.6 补齐设置页展示层测试（ViewModel 输出、回调链路、关键文案）
+  - 文件：`Tests/InfoBarTests/UI/Settings/SettingsProviderViewModelTests.swift`、`Tests/InfoBarTests/UI/Settings/SettingsWindowControllerTests.swift`
 
 ### 验收标准
 
-- 两个 provider 都能稳定产出快照并落地到 `connector_events`。
-- 扩展权限仍限定在白名单域。
-- Factory 现有能力无回归。
+- 详情区能稳定展示多维 usage 信息，而非仅百分比。
+- 列表与详情信息一致，不出现旧数据残留或切换错位。
+- 拖拽、刷新、可见性开关仍可用且回调链路正确。
 
 ---
 
-## 里程碑 5：可观测性与稳定性加固
+## 里程碑 5：回归验证与文档沉淀
 
-**目标**：为采集与同步链路提供可观测指标、错误分类和运维可读性。
+**目标**：完成跨 provider 回归，沉淀字段映射规范与设置页展示规则，支持后续新增 provider 快速接入。
 
 ### 任务
 
-- [ ] 5.1 为 service worker 增加 sink 成功率/去重率/失败原因统计
-  - 文件：`extensions/info-bar-web-connector/src/background/service-worker.js`
-- [ ] 5.2 设计并落地 metrics 存储结构（`chrome.storage.local`）
-  - 文件：`extensions/info-bar-web-connector/src/background/service-worker.js`
-- [ ] 5.3 统一日志脱敏策略并补齐敏感字段回归检查
-  - 文件：`extensions/info-bar-web-connector/src/background/service-worker.js`、`extensions/info-bar-web-connector/src/shared/contracts.js`
-- [ ] 5.4 校验 `chrome.alarms` 刷新稳定性（节流/退避）
-  - 文件：`extensions/info-bar-web-connector/src/background/service-worker.js`
-- [ ] 5.5 更新运行手册与故障排查指南
+- [ ] 5.1 执行 quota 相关全量测试并修复回归
+  - 文件：`Tests/InfoBarTests/Modules/Quota/*`、`Tests/InfoBarTests/UI/Settings/*`
+- [ ] 5.2 编写 provider usage 字段映射矩阵（字段来源、优先级、降级策略）
+  - 文件：`docs/provider-usage-mapping.md`（新增）
+- [ ] 5.3 编写设置页展示规范（卡片结构、文案规则、空态规则）
+  - 文件：`docs/settings-ui-spec.md`（新增）
+- [ ] 5.4 更新扩展与主程序协作文档（usage 丰富字段如何从采集端传递到 UI）
   - 文件：`extensions/info-bar-web-connector/README.md`、`docs/`
+- [ ] 5.5 形成手工验收清单并记录结果
+  - 文件：`docs/settings-qa-checklist.md`（新增）
 
 ### 验收标准
 
-- 可以追踪最近周期的采集量、去重效果、失败分布。
-- 故障定位不依赖临时打印，基于结构化指标即可快速判断问题。
-- 日志与存储中不出现敏感 token/cookie/secret 明文。
+- `swift test` 全绿，重点模块（Quota/Settings）无回归失败。
+- 文档能够指导新增 provider 按统一方式映射并在 UI 呈现。
+- 设置页在视觉质量和信息密度上达到可交付状态。

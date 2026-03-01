@@ -17,6 +17,38 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertEqual(sut.window?.title, "InfoBar Settings")
     }
 
+    func testPanelUsesExpectedFrameAndStyle() {
+        let sut = SettingsWindowController()
+        sut.show()
+
+        let panel = try? XCTUnwrap(sut.window)
+        let contentRect = panel?.contentRect(forFrameRect: panel?.frame ?? .zero) ?? .zero
+        XCTAssertEqual(contentRect.size.width, SettingsTheme.Layout.panelSize.width, accuracy: 0.1)
+        XCTAssertEqual(contentRect.size.height, SettingsTheme.Layout.panelSize.height, accuracy: 0.1)
+
+        XCTAssertTrue(panel?.styleMask.contains(.titled) == true)
+        XCTAssertTrue(panel?.styleMask.contains(.closable) == true)
+        XCTAssertTrue(panel?.styleMask.contains(.nonactivatingPanel) == true)
+        XCTAssertEqual(panel?.level, .floating)
+        XCTAssertEqual(panel?.isOpaque, true)
+    }
+
+    func testSplitViewUsesMilestoneOneLayoutMetrics() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+
+        let splitVC = try XCTUnwrap(splitViewController(from: sut.window))
+        XCTAssertEqual(splitVC.splitViewItems.count, 2)
+        XCTAssertEqual(splitVC.splitView.dividerStyle, .thin)
+
+        let leftItem = splitVC.splitViewItems[0]
+        let rightItem = splitVC.splitViewItems[1]
+
+        XCTAssertEqual(leftItem.minimumThickness, SettingsTheme.Layout.sidebarWidth, accuracy: 0.1)
+        XCTAssertEqual(leftItem.maximumThickness, SettingsTheme.Layout.sidebarWidth, accuracy: 0.1)
+        XCTAssertEqual(rightItem.minimumThickness, SettingsTheme.Layout.detailMinimumWidth, accuracy: 0.1)
+    }
+
     func testCallingShowTwiceReusesSameWindow() {
         let sut = SettingsWindowController()
         sut.show()
@@ -30,6 +62,44 @@ final class SettingsWindowControllerTests: XCTestCase {
         let vms = [SettingsProviderViewModel(providerID: "codex", snapshot: nil)]
         sut.update(viewModels: vms)
         XCTAssertEqual(sut.viewModels.map(\.providerID), ["codex"])
+    }
+
+    func testEmptyProviderListShowsSelectionPlaceholder() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+        sut.update(viewModels: [])
+
+        let detailView = try XCTUnwrap(detailView(from: sut.window))
+        XCTAssertTrue(allTexts(in: detailView).contains("Select a provider"))
+    }
+
+    func testProviderWithoutWindowsShowsUsagePlaceholder() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+        sut.update(viewModels: [SettingsProviderViewModel(providerID: "codex", snapshot: nil)])
+
+        let detailView = try XCTUnwrap(detailView(from: sut.window))
+        let texts = allTexts(in: detailView)
+        XCTAssertTrue(texts.contains("No usage data yet"))
+    }
+
+    func testSelectionStaysStableAfterRefreshingViewModels() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+
+        let first = SettingsProviderViewModel(providerID: "codex", snapshot: makeSnapshot(providerID: "codex", usedPercent: 20))
+        let second = SettingsProviderViewModel(providerID: "bigmodel", snapshot: makeSnapshot(providerID: "bigmodel", usedPercent: 65))
+        sut.update(viewModels: [first, second])
+
+        let tableView = try XCTUnwrap(providerTableView(from: sut.window))
+        tableView.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+
+        let secondUpdated = SettingsProviderViewModel(providerID: "bigmodel", snapshot: makeSnapshot(providerID: "bigmodel", usedPercent: 70))
+        let firstUpdated = SettingsProviderViewModel(providerID: "codex", snapshot: makeSnapshot(providerID: "codex", usedPercent: 25))
+        sut.update(viewModels: [secondUpdated, firstUpdated])
+
+        let detailView = try XCTUnwrap(detailView(from: sut.window))
+        XCTAssertTrue(allTexts(in: detailView).contains("bigmodel"))
     }
 
     func testOnVisibilityChangedCallbackIsFired() {
@@ -55,5 +125,69 @@ final class SettingsWindowControllerTests: XCTestCase {
         sut.onRefreshRequested = { id in receivedProviderID = id }
         sut.onRefreshRequested?("codex")
         XCTAssertEqual(receivedProviderID, "codex")
+    }
+
+    // MARK: - Helpers
+
+    private func splitViewController(from panel: NSPanel?) -> NSSplitViewController? {
+        guard let rootVC = panel?.contentViewController else { return nil }
+
+        if let splitVC = rootVC as? NSSplitViewController {
+            return splitVC
+        }
+
+        return rootVC.children.compactMap { $0 as? NSSplitViewController }.first
+    }
+
+    private func detailView(from panel: NSPanel?) -> NSView? {
+        guard let splitVC = splitViewController(from: panel), splitVC.splitViewItems.count > 1 else {
+            return nil
+        }
+        return splitVC.splitViewItems[1].viewController.view
+    }
+
+    private func providerTableView(from panel: NSPanel?) -> NSTableView? {
+        guard let splitVC = splitViewController(from: panel), !splitVC.splitViewItems.isEmpty else {
+            return nil
+        }
+
+        return firstSubview(in: splitVC.splitViewItems[0].viewController.view, matching: NSTableView.self)
+    }
+
+    private func allTexts(in view: NSView) -> [String] {
+        var values: [String] = []
+        if let label = view as? NSTextField {
+            let text = label.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                values.append(text)
+            }
+        }
+
+        for subview in view.subviews {
+            values.append(contentsOf: allTexts(in: subview))
+        }
+
+        return values
+    }
+
+    private func firstSubview<T: NSView>(in view: NSView, matching type: T.Type) -> T? {
+        if let matched = view as? T {
+            return matched
+        }
+
+        for subview in view.subviews {
+            if let matched: T = firstSubview(in: subview, matching: type) {
+                return matched
+            }
+        }
+
+        return nil
+    }
+
+    private func makeSnapshot(providerID: String, usedPercent: Int) -> QuotaSnapshot {
+        let fetchedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let resetAt = fetchedAt.addingTimeInterval(3600)
+        let window = QuotaWindow(id: "hour", label: "H", usedPercent: usedPercent, resetAt: resetAt)
+        return QuotaSnapshot(providerID: providerID, windows: [window], fetchedAt: fetchedAt)
     }
 }
