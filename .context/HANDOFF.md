@@ -1,4 +1,24 @@
-# Info Bar Handoff (2026-02-24)
+# Info Bar Handoff (2026-03-01)
+
+## 0. 本轮重点（Factory + Extension + Supabase）
+
+1. 新增 `factory` provider，并把 Mac App Factory 数据读取切到 Supabase。
+2. 新增 Chrome Extension `extensions/info-bar-web-connector`（MV3，方式 A）：
+   - MAIN world 注入 page script
+   - hook `fetch` + `XMLHttpRequest`
+   - 捕获 Factory usage 响应并通过 `page -> content -> service worker` 转发
+3. Service Worker 已具备：
+   - 统一数据契约标准化
+   - 去重与本地落盘（含兼容旧 key）
+   - Supabase sink 写入 + read-back 缓存
+   - `chrome.alarms` 定时刷新驱动基础能力
+4. Supabase 侧新增通用事件表 migration：`connector_events`（含 RLS policy）。
+5. 配置方案切换为：
+   - 仓库保留 `config.example.json`
+   - 本地使用 `config.local.json`（gitignore）
+   - Mac App 与 Extension 均支持该配置模式
+
+## 1. 当前状态（已完成 & 已验证）
 
 ## 0. 归档记录
 

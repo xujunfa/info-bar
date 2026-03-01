@@ -24,6 +24,9 @@ public enum QuotaProviderRegistry {
             },
             QuotaProviderRegistration(id: "bigmodel") {
                 BigModelUsageClient()
+            },
+            QuotaProviderRegistration(id: "factory") {
+                FactoryUsageClient()
             }
         ]
     }

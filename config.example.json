@@ -1,0 +1,8 @@
+{
+  "supabase": {
+    "projectURL": "https://your-project-ref.supabase.co",
+    "anonKey": "sb_publishable_replace_me",
+    "table": "connector_events",
+    "connectorID": "info-bar-web-connector"
+  }
+}

@@ -204,4 +204,24 @@ final class QuotaDisplayModelTests: XCTestCase {
 
         XCTAssertEqual(model.state, .normal)
     }
+
+    func testDisplayModelSupportsFactoryMonthlyFormat() {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let snapshot = QuotaSnapshot(
+            providerID: "factory",
+            windows: [
+                QuotaWindow(
+                    id: "monthly",
+                    label: "M",
+                    usedPercent: 40,
+                    resetAt: fetchedAt.addingTimeInterval(1.2 * 24 * 3600)
+                )
+            ],
+            fetchedAt: fetchedAt
+        )
+
+        let model = QuotaDisplayModel(snapshot: snapshot)
+
+        XCTAssertEqual(model.topLine, "M: 40% 1.2d")
+    }
 }
