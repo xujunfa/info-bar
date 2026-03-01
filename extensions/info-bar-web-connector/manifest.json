@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Info Bar Web Connector",
+  "version": "0.1.0",
+  "description": "Capture Factory usage snapshots and persist normalized records to local storage and Supabase.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://app.factory.ai/*",
+    "https://xtgnhgfeqedmlkyvnjvy.supabase.co/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://app.factory.ai/*"
+      ],
+      "js": [
+        "src/shared/contracts.js",
+        "src/content/bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/shared/contracts.js",
+        "src/page/factory-hook.js"
+      ],
+      "matches": [
+        "https://app.factory.ai/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_title": "Info Bar Web Connector"
+  }
+}

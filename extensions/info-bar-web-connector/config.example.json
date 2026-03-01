@@ -1,0 +1,9 @@
+{
+  "supabase": {
+    "enabled": true,
+    "projectUrl": "https://your-project-ref.supabase.co",
+    "apiKey": "sb_publishable_replace_me",
+    "table": "connector_events",
+    "readBackLimit": 20
+  }
+}
