@@ -4,12 +4,12 @@ import AppKit
 enum SettingsTheme {
     enum Layout {
         static let panelSize = NSSize(width: 640, height: 440)
-        static let sidebarWidth: CGFloat = 220
+        static let sidebarWidth: CGFloat = 204
         static let detailMinimumWidth: CGFloat = 320
         static let contentInset: CGFloat = 20
-        static let listContentInset = NSEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
-        static let listRowHeight: CGFloat = 40
-        static let listRowSpacing: CGFloat = 2
+        static let listContentInset = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        static let listRowHeight: CGFloat = 38
+        static let listRowSpacing: CGFloat = 1
         static let listCellHorizontalInset: CGFloat = 10
         static let placeholderMaxWidth: CGFloat = 360
         static let usagePlaceholderHeight: CGFloat = 70
@@ -24,8 +24,8 @@ enum SettingsTheme {
     }
 
     enum Typography {
-        static var providerName: NSFont { NSFont.systemFont(ofSize: 13, weight: .semibold) }
-        static var providerTitle: NSFont { NSFont.systemFont(ofSize: 18, weight: .bold) }
+        static var providerName: NSFont { NSFont.systemFont(ofSize: 13, weight: .medium) }
+        static var providerTitle: NSFont { NSFont.systemFont(ofSize: 18, weight: .semibold) }
         static var body: NSFont { NSFont.systemFont(ofSize: 13, weight: .regular) }
         static var caption: NSFont { NSFont.systemFont(ofSize: 11, weight: .regular) }
         static var section: NSFont { NSFont.systemFont(ofSize: 11, weight: .semibold) }

@@ -49,6 +49,19 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertEqual(rightItem.minimumThickness, SettingsTheme.Layout.detailMinimumWidth, accuracy: 0.1)
     }
 
+    func testSecondRoundTuningUsesCompactSidebarAndRows() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+
+        let splitVC = try XCTUnwrap(splitViewController(from: sut.window))
+        let leftItem = splitVC.splitViewItems[0]
+        XCTAssertEqual(leftItem.minimumThickness, 204, accuracy: 0.1)
+        XCTAssertEqual(leftItem.maximumThickness, 204, accuracy: 0.1)
+
+        let tableView = try XCTUnwrap(providerTableView(from: sut.window))
+        XCTAssertEqual(tableView.rowHeight, 38, accuracy: 0.1)
+    }
+
     func testCallingShowTwiceReusesSameWindow() {
         let sut = SettingsWindowController()
         sut.show()
@@ -83,6 +96,36 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertTrue(texts.contains("No usage data yet"))
     }
 
+    func testProviderDisplayNameIsCapitalizedInDetailHeader() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+        sut.update(viewModels: [SettingsProviderViewModel(providerID: "codex", snapshot: nil)])
+
+        let detailView = try XCTUnwrap(detailView(from: sut.window))
+        XCTAssertTrue(allTexts(in: detailView).contains("Codex"))
+    }
+
+    func testRefreshButtonUsesIconOnlyPresentation() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+        sut.update(viewModels: [SettingsProviderViewModel(providerID: "codex", snapshot: nil)])
+
+        let detailView = try XCTUnwrap(detailView(from: sut.window))
+        let refreshButton = try XCTUnwrap(firstSubview(in: detailView, matching: NSButton.self))
+        XCTAssertEqual(refreshButton.title, "")
+        XCTAssertNotNil(refreshButton.image)
+    }
+
+    func testVisibilitySwitchUsesSmallControlSize() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+        sut.update(viewModels: [SettingsProviderViewModel(providerID: "codex", snapshot: nil)])
+
+        let detailView = try XCTUnwrap(detailView(from: sut.window))
+        let toggle = try XCTUnwrap(firstSubview(in: detailView, matching: NSSwitch.self))
+        XCTAssertEqual(toggle.controlSize, .small)
+    }
+
     func testSelectionStaysStableAfterRefreshingViewModels() throws {
         let sut = SettingsWindowController()
         sut.show()
@@ -99,7 +142,7 @@ final class SettingsWindowControllerTests: XCTestCase {
         sut.update(viewModels: [secondUpdated, firstUpdated])
 
         let detailView = try XCTUnwrap(detailView(from: sut.window))
-        XCTAssertTrue(allTexts(in: detailView).contains("bigmodel"))
+        XCTAssertTrue(allTexts(in: detailView).map { $0.lowercased() }.contains("bigmodel"))
     }
 
     func testOnVisibilityChangedCallbackIsFired() {

@@ -219,8 +219,10 @@ private final class ProviderListViewController: NSViewController,
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let rowView = ProviderListRowView()
-        rowView.onHoverChanged = { [weak self] isHovered in
-            guard let self else { return }
+        rowView.onHoverChanged = { [weak self, weak tableView, weak rowView] isHovered in
+            guard let self, let tableView, let rowView else { return }
+            let row = tableView.row(for: rowView)
+            guard row >= 0 else { return }
             if isHovered {
                 hoveredRow = row
             } else if hoveredRow == row {
@@ -240,6 +242,13 @@ private final class ProviderListViewController: NSViewController,
             selectedProviderID = nil
             onSelectionChanged?(nil)
         }
+
+        // Keep hover state in sync after click-based selection changes.
+        let mouseLocation = tableView.convert(tableView.window?.mouseLocationOutsideOfEventStream ?? .zero,
+                                              from: nil)
+        let rowUnderPointer = tableView.row(at: mouseLocation)
+        hoveredRow = rowUnderPointer >= 0 ? rowUnderPointer : nil
+
         applyRowStates()
     }
 
@@ -304,31 +313,42 @@ private final class ProviderListViewController: NSViewController,
             let isSelected = tableView.selectedRowIndexes.contains(row)
             let isHovered = hoveredRow == row
             cell.applyInteractionState(selected: isSelected, hovered: isHovered)
+            if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? ProviderListRowView {
+                rowView.isSelectedForHighlight = isSelected
+                rowView.isHoveredForHighlight = isHovered
+            }
         }
     }
 }
 
 private final class ProviderListRowView: NSTableRowView {
     var onHoverChanged: ((Bool) -> Void)?
-
-    private var trackingAreaRef: NSTrackingArea?
-    private var isHovered = false {
+    var isSelectedForHighlight = false {
         didSet {
-            guard oldValue != isHovered else { return }
+            guard oldValue != isSelectedForHighlight else { return }
             needsDisplay = true
-            onHoverChanged?(isHovered)
         }
     }
+    var isHoveredForHighlight = false {
+        didSet {
+            guard oldValue != isHoveredForHighlight else { return }
+            needsDisplay = true
+        }
+    }
+
+    private var trackingAreaRef: NSTrackingArea?
 
     override func drawSelection(in dirtyRect: NSRect) {
         // Custom selection drawing in drawBackground.
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+
         let fillColor: NSColor
-        if isSelected {
+        if isSelectedForHighlight {
             fillColor = SettingsTheme.Color.rowSelectedBackground
-        } else if isHovered {
+        } else if isHoveredForHighlight {
             fillColor = SettingsTheme.Color.rowHoverBackground
         } else {
             return
@@ -363,12 +383,12 @@ private final class ProviderListRowView: NSTableRowView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        isHovered = true
+        onHoverChanged?(true)
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
-        isHovered = false
+        onHoverChanged?(false)
     }
 }
 
@@ -437,15 +457,15 @@ private final class ProviderRowView: NSTableCellView {
             nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusDot.leadingAnchor,
                                                 constant: -8),
 
-            statusDot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            statusDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-            statusDot.widthAnchor.constraint(equalToConstant: 10),
-            statusDot.heightAnchor.constraint(equalToConstant: 10),
+            statusDot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
+            statusDot.centerYAnchor.constraint(equalTo: nameLabel.centerYAnchor),
+            statusDot.widthAnchor.constraint(equalToConstant: 9),
+            statusDot.heightAnchor.constraint(equalToConstant: 9),
         ])
     }
 
     func configure(viewModel: SettingsProviderViewModel) {
-        nameLabel.stringValue = viewModel.providerID
+        nameLabel.stringValue = providerDisplayName(for: viewModel.providerID)
         iconView.image = providerIconImage(for: viewModel.providerID)
 
         let hasCriticalUsage = viewModel.windows.contains { $0.usedPercent >= 90 }
@@ -683,7 +703,7 @@ private final class ProviderDetailViewController: NSViewController {
             iconView.heightAnchor.constraint(equalToConstant: 40),
         ])
 
-        let nameLabel = NSTextField(labelWithString: vm.providerID)
+        let nameLabel = NSTextField(labelWithString: providerDisplayName(for: vm.providerID))
         nameLabel.font = SettingsTheme.Typography.providerTitle
         nameLabel.textColor = SettingsTheme.Color.primaryText
 
@@ -702,9 +722,18 @@ private final class ProviderDetailViewController: NSViewController {
         titleStack.alignment = .leading
         titleStack.spacing = 3
 
-        let refreshButton = NSButton(title: "Refresh", target: nil, action: nil)
-        refreshButton.bezelStyle = .rounded
+        let refreshImage = NSImage(
+            systemSymbolName: "arrow.clockwise",
+            accessibilityDescription: "Refresh usage"
+        ) ?? NSImage()
+        refreshImage.isTemplate = true
+
+        let refreshButton = NSButton(image: refreshImage, target: nil, action: nil)
+        refreshButton.title = ""
+        refreshButton.imagePosition = .imageOnly
+        refreshButton.bezelStyle = .texturedRounded
         refreshButton.controlSize = .small
+        refreshButton.toolTip = "Refresh usage"
 
         let bridge = RefreshButtonBridge(providerID: vm.providerID) { [weak self] id in
             self?.onRefreshRequested?(id)
@@ -770,6 +799,7 @@ private final class ProviderDetailViewController: NSViewController {
 
         let toggle = NSSwitch()
         toggle.state = vm.isVisible ? .on : .off
+        toggle.controlSize = .small
 
         let bridge = ToggleSwitchBridge(providerID: vm.providerID) { [weak self] id, visible in
             self?.onVisibilityChanged?(id, visible)
@@ -820,4 +850,9 @@ private func providerIconImage(for providerID: String,
     }
 
     return NSImage(systemSymbolName: fallbackSystemSymbol, accessibilityDescription: nil) ?? NSImage()
+}
+
+private func providerDisplayName(for providerID: String) -> String {
+    guard let first = providerID.first else { return providerID }
+    return first.uppercased() + providerID.dropFirst()
 }
