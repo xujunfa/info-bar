@@ -32,6 +32,7 @@ final class QuotaStatusView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        guard bounds.width > 0, bounds.height > 0 else { return }
         super.draw(dirtyRect)
 
         drawIcon()
@@ -39,7 +40,7 @@ final class QuotaStatusView: NSView {
         let textColor = color(for: model.state)
         let topFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
         let bottomFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
-        let safeTextColor = textColor ?? NSColor.labelColor
+        let safeTextColor = textColor
         
         let pStyle = NSMutableParagraphStyle()
         pStyle.lineBreakMode = .byTruncatingTail
