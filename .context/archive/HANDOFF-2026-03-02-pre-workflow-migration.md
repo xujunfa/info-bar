@@ -1,9 +1,5 @@
 # Info Bar Handoff (2026-03-01)
 
-> Workflow 迁移说明（2026-03-02）：
-> 当前交接主入口已切换到 `.context/ACTIVE_CONTEXT.md`，执行进度以 `.context/IMPLEMENTATION_PLAN.md` 勾选状态为准。
-> 本文件保留为历史上下文参考，不再作为唯一交接来源。
-
 ## 0. 本轮重点（Factory + Extension + Supabase）
 
 1. 新增 `factory` provider，并把 Mac App Factory 数据读取切到 Supabase。
