@@ -45,9 +45,11 @@ final class QuotaStatusView: NSView {
         pStyle.lineBreakMode = .byTruncatingTail
         pStyle.alignment = .left
 
-        if !model.topLine.isEmpty {
+        let contentWidth = bounds.width - QuotaLayoutMetrics.textX - 2
+        
+        if !model.topLine.isEmpty, contentWidth > 0 {
             let topAttr = NSMutableAttributedString(string: model.topLine)
-            let fullRange = NSRect(x: QuotaLayoutMetrics.textX, y: 11, width: bounds.width - QuotaLayoutMetrics.textX - 2, height: 10)
+            let fullRange = NSRect(x: QuotaLayoutMetrics.textX, y: 11, width: contentWidth, height: 10)
             let range = NSRange(location: 0, length: topAttr.length)
             topAttr.addAttribute(.foregroundColor, value: safeTextColor, range: range)
             topAttr.addAttribute(.paragraphStyle, value: pStyle, range: range)
@@ -55,9 +57,9 @@ final class QuotaStatusView: NSView {
             topAttr.draw(in: fullRange)
         }
         
-        if !model.bottomLine.isEmpty {
+        if !model.bottomLine.isEmpty, contentWidth > 0 {
             let botAttr = NSMutableAttributedString(string: model.bottomLine)
-            let fullRange = NSRect(x: QuotaLayoutMetrics.textX, y: 1, width: bounds.width - QuotaLayoutMetrics.textX - 2, height: 10)
+            let fullRange = NSRect(x: QuotaLayoutMetrics.textX, y: 1, width: contentWidth, height: 10)
             let range = NSRange(location: 0, length: botAttr.length)
             botAttr.addAttribute(.foregroundColor, value: safeTextColor, range: range)
             botAttr.addAttribute(.paragraphStyle, value: pStyle, range: range)
