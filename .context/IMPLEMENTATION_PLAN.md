@@ -121,15 +121,15 @@
 
 ### 任务
 
-- [ ] 5.1 执行 quota 相关全量测试并修复回归
+- [x] 5.1 执行 quota 相关全量测试并修复回归
   - 文件：`Tests/InfoBarTests/Modules/Quota/*`、`Tests/InfoBarTests/UI/Settings/*`
-- [ ] 5.2 编写 provider usage 字段映射矩阵（字段来源、优先级、降级策略）
+- [x] 5.2 编写 provider usage 字段映射矩阵（字段来源、优先级、降级策略）
   - 文件：`docs/provider-usage-mapping.md`（新增）
-- [ ] 5.3 编写设置页展示规范（卡片结构、文案规则、空态规则）
+- [x] 5.3 编写设置页展示规范（卡片结构、文案规则、空态规则）
   - 文件：`docs/settings-ui-spec.md`（新增）
-- [ ] 5.4 更新扩展与主程序协作文档（usage 丰富字段如何从采集端传递到 UI）
+- [x] 5.4 更新扩展与主程序协作文档（usage 丰富字段如何从采集端传递到 UI）
   - 文件：`extensions/info-bar-web-connector/README.md`、`docs/`
-- [ ] 5.5 形成手工验收清单并记录结果
+- [x] 5.5 形成手工验收清单并记录结果
   - 文件：`docs/settings-qa-checklist.md`（新增）
 
 ### 验收标准

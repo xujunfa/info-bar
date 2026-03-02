@@ -24,9 +24,12 @@ final class ZenMuxUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.windows[0].label, "M")
         XCTAssertEqual(snapshot.windows[0].usedPercent, 41)
         XCTAssertEqual(snapshot.windows[0].resetAt, Date(timeIntervalSince1970: 1768000000))
+        XCTAssertEqual(snapshot.windows[0].metadata?["period_type"], "monthly")
         XCTAssertEqual(snapshot.windows[1].label, "W")
         XCTAssertEqual(snapshot.windows[1].usedPercent, 9)
         XCTAssertEqual(snapshot.windows[1].resetAt, Date(timeIntervalSince1970: 1768600000))
+        XCTAssertEqual(snapshot.windows[1].windowTitle, "Weekly usage")
+        XCTAssertEqual(snapshot.windows[1].metadata?["period_type"], "weekly")
     }
 
     func testThrowsWhenUsageFieldsMissing() throws {
@@ -83,6 +86,50 @@ final class ZenMuxUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.windows[1].label, "W")
         XCTAssertEqual(snapshot.windows[1].usedPercent, 12)
         XCTAssertEqual(snapshot.windows[1].resetAt, Date(timeIntervalSince1970: 1_771_639_208))
+    }
+
+    func testParsesObjectPayloadArrayAndSupplementaryUsageFields() throws {
+        let json = """
+        {
+          "success": true,
+          "data": {
+            "usageWindows": [
+              {
+                "periodType": "month",
+                "used": 2400,
+                "limit": 12000,
+                "remaining": 9600,
+                "next_reset_at": 1769600000,
+                "unit": "tokens",
+                "title": "Monthly tokens"
+              },
+              {
+                "periodType": "week",
+                "usedRate": 0.2,
+                "cycleEndTime": 1769000000
+              }
+            ]
+          }
+        }
+        """
+
+        let response = try ZenMuxUsageClient.decodeResponse(data: Data(json.utf8))
+        let snapshot = try ZenMuxUsageClient.mapToSnapshot(
+            response: response,
+            fetchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        XCTAssertEqual(snapshot.windows.count, 2)
+        XCTAssertEqual(snapshot.windows[0].id, "week")
+        XCTAssertEqual(snapshot.windows[0].usedPercent, 20)
+        XCTAssertEqual(snapshot.windows[1].id, "month")
+        XCTAssertEqual(snapshot.windows[1].usedPercent, 20)
+        XCTAssertEqual(snapshot.windows[1].used, 2_400)
+        XCTAssertEqual(snapshot.windows[1].limit, 12_000)
+        XCTAssertEqual(snapshot.windows[1].remaining, 9_600)
+        XCTAssertEqual(snapshot.windows[1].unit, "tokens")
+        XCTAssertEqual(snapshot.windows[1].windowTitle, "Monthly tokens")
+        XCTAssertEqual(snapshot.windows[1].resetAt, Date(timeIntervalSince1970: 1_769_600_000))
     }
 
     func testCookieHeaderUsesEnvironmentOverride() {

@@ -31,6 +31,65 @@ struct FactoryUsageClient: QuotaSnapshotFetching {
     static func mapToSnapshot(record: SupabaseConnectorEventRecord, fetchedAt: Date) throws -> QuotaSnapshot {
         let payload = record.payload
 
+        var used = number(forPath: ["usage", "standard", "orgTotalTokensUsed"], in: payload)
+            ?? number(forPath: ["usage", "standard", "userTokens"], in: payload)
+            ?? number(forPath: ["usage", "standard", "orgOverageUsed"], in: payload)
+            ?? number(for: [
+                "current_month_usage",
+                "currentMonthUsage",
+                "month_usage",
+                "monthUsage",
+                "usage",
+                "used",
+                "used_tokens",
+                "usedTokens",
+                "consumed",
+                "consumed_tokens",
+                "total_usage",
+                "totalUsage"
+            ], in: payload)
+
+        var limit = number(forPath: ["usage", "standard", "totalAllowance"], in: payload)
+            ?? number(forPath: ["usage", "standard", "basicAllowance"], in: payload)
+            ?? number(for: [
+                "monthly_limit",
+                "monthlyLimit",
+                "month_limit",
+                "monthLimit",
+                "token_limit",
+                "tokenLimit",
+                "quota",
+                "total_quota",
+                "totalQuota",
+                "limit",
+                "total"
+            ], in: payload)
+
+        var remaining = number(forPath: ["usage", "standard", "remainingAllowance"], in: payload)
+            ?? number(forPath: ["usage", "standard", "orgRemainingTokens"], in: payload)
+            ?? number(for: [
+                "monthly_remaining",
+                "monthlyRemaining",
+                "month_remaining",
+                "monthRemaining",
+                "remaining_tokens",
+                "remainingTokens",
+                "remaining",
+                "left",
+                "left_tokens",
+                "leftTokens"
+            ], in: payload)
+
+        if limit == nil, let used, let remaining {
+            limit = used + remaining
+        }
+        if used == nil, let limit, let remaining {
+            used = max(0, limit - remaining)
+        }
+        if remaining == nil, let limit, let used {
+            remaining = max(0, limit - used)
+        }
+
         let usedPercent: Int
         if let ratio = number(forPath: ["usage", "standard", "usedRatio"], in: payload) {
             usedPercent = percentFromRatio(ratio)
@@ -48,47 +107,22 @@ struct FactoryUsageClient: QuotaSnapshotFetching {
         ], in: payload),
                   let parsed = parsePercent(value) {
             usedPercent = parsed
+        } else if let used, let limit, limit > 0 {
+            usedPercent = Int((max(0, min(used, limit)) / limit * 100).rounded())
+        } else if let remaining, let limit, limit > 0 {
+            usedPercent = Int((max(0, min(limit - remaining, limit)) / limit * 100).rounded())
         } else {
-            let used = number(forPath: ["usage", "standard", "orgTotalTokensUsed"], in: payload)
-                ?? number(forPath: ["usage", "standard", "userTokens"], in: payload)
-                ?? number(forPath: ["usage", "standard", "orgOverageUsed"], in: payload)
-                ?? number(for: [
-                    "current_month_usage",
-                    "currentMonthUsage",
-                    "month_usage",
-                    "monthUsage",
-                    "usage",
-                    "used",
-                    "used_tokens",
-                    "usedTokens",
-                    "consumed",
-                    "consumed_tokens",
-                    "total_usage",
-                    "totalUsage"
-                ], in: payload)
-            guard let used else {
-                throw FactoryUsageClientError.missingUsageData
-            }
+            throw FactoryUsageClientError.missingUsageData
+        }
 
-            let limit = number(forPath: ["usage", "standard", "totalAllowance"], in: payload)
-                ?? number(forPath: ["usage", "standard", "basicAllowance"], in: payload)
-                ?? number(for: [
-                    "monthly_limit",
-                    "monthlyLimit",
-                    "month_limit",
-                    "monthLimit",
-                    "token_limit",
-                    "tokenLimit",
-                    "quota",
-                    "total_quota",
-                    "totalQuota",
-                    "limit",
-                    "total"
-                ], in: payload)
-                ?? Self.defaultMonthlyLimitTokens
-
-            let safeLimit = max(1, limit)
-            usedPercent = Int((max(0, min(used, safeLimit)) / safeLimit * 100).rounded())
+        if limit == nil, used != nil {
+            limit = Self.defaultMonthlyLimitTokens
+        }
+        if let limit, limit > 0, used == nil {
+            used = limit * Double(usedPercent) / 100
+        }
+        if let limit, limit > 0, remaining == nil, let used {
+            remaining = max(0, limit - used)
         }
 
         let resetAt = date(forPath: ["usage", "endDate"], in: payload)
@@ -108,7 +142,38 @@ struct FactoryUsageClient: QuotaSnapshotFetching {
             ], in: payload)
             ?? endOfMonth(from: fetchedAt)
 
-        let window = QuotaWindow(id: "monthly", label: "M", usedPercent: usedPercent, resetAt: resetAt)
+        var metadata: [String: String] = [
+            "connector": record.connector,
+            "event": record.event
+        ]
+        if let dedupeKey = normalizedText(record.dedupeKey) {
+            metadata["dedupe_key"] = dedupeKey
+        }
+        if let traceID = string(from: record.metadata, keys: ["traceId", "trace_id"]) {
+            metadata["trace_id"] = traceID
+        }
+
+        let windowTitle = string(
+            for: ["window_title", "windowTitle", "title", "plan_name", "planName", "subscription_name", "subscriptionName"],
+            in: payload
+        ) ?? "Monthly tokens"
+        let unit = string(
+            for: ["unit", "token_unit", "tokenUnit", "usage_unit", "usageUnit"],
+            in: payload
+        ) ?? "tokens"
+
+        let window = QuotaWindow(
+            id: "monthly",
+            label: "M",
+            usedPercent: usedPercent,
+            resetAt: resetAt,
+            used: used,
+            limit: limit,
+            remaining: remaining,
+            unit: unit,
+            windowTitle: windowTitle,
+            metadata: metadata
+        )
         return QuotaSnapshot(providerID: "factory", windows: [window], fetchedAt: fetchedAt)
     }
 
@@ -205,6 +270,32 @@ struct FactoryUsageClient: QuotaSnapshotFetching {
         return Int(max(0, min(100, percent.rounded())))
     }
 
+    private static func string(for keys: [String], in root: ConnectorJSONValue) -> String? {
+        guard let value = value(for: keys, in: root) else {
+            return nil
+        }
+        return string(from: value)
+    }
+
+    private static func string(from value: ConnectorJSONValue?, keys: [String]) -> String? {
+        guard let value else { return nil }
+        return string(for: keys, in: value)
+    }
+
+    private static func string(from value: ConnectorJSONValue) -> String? {
+        switch value {
+        case let .string(v):
+            let trimmed = v.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case let .number(v):
+            return String(v)
+        case let .bool(v):
+            return String(v)
+        default:
+            return nil
+        }
+    }
+
     private static func percentFromRatio(_ ratio: Double) -> Int {
         let normalized: Double
         if ratio <= 1 {
@@ -213,6 +304,13 @@ struct FactoryUsageClient: QuotaSnapshotFetching {
             normalized = ratio
         }
         return Int(max(0, min(100, normalized.rounded())))
+    }
+
+    private static func normalizedText(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
     }
 
     private static func date(forPath path: [String], in root: ConnectorJSONValue) -> Date? {

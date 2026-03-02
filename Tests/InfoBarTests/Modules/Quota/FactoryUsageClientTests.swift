@@ -65,6 +65,12 @@ final class FactoryUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.windows.count, 1)
         XCTAssertEqual(snapshot.windows.first?.usedPercent, 20)
         XCTAssertEqual(snapshot.windows.first?.resetAt, Date(timeIntervalSince1970: 1_775_026_800))
+        XCTAssertEqual(snapshot.windows.first?.used, 4_000_000)
+        XCTAssertEqual(snapshot.windows.first?.limit, 20_000_000)
+        XCTAssertEqual(snapshot.windows.first?.remaining, 16_000_000)
+        XCTAssertEqual(snapshot.windows.first?.unit, "tokens")
+        XCTAssertEqual(snapshot.windows.first?.windowTitle, "Monthly tokens")
+        XCTAssertEqual(snapshot.windows.first?.metadata?["connector"], "info-bar-web-connector")
     }
 
     func testFetchSnapshotThrowsUnauthorizedWhenSupabaseRejects() {
@@ -97,6 +103,94 @@ final class FactoryUsageClientTests: XCTestCase {
                 return
             }
         }
+    }
+
+    func testFetchSnapshotThrowsNoRecordsFoundWhenSupabaseReturnsEmptyList() {
+        URLProtocolStub.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url ?? URL(string: "https://example.com")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data("[]".utf8))
+        }
+
+        let client = makeFactoryClient(session: makeStubSession())
+        XCTAssertThrowsError(try client.fetchSnapshot()) { error in
+            guard case SupabaseConnectorClientError.noRecordsFound = error else {
+                XCTFail("Expected noRecordsFound, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testFetchSnapshotThrowsMissingUsageDataWhenPayloadFieldsMissing() {
+        URLProtocolStub.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url ?? URL(string: "https://example.com")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            let body = """
+            [{
+              "connector":"info-bar-web-connector",
+              "provider":"factory",
+              "event":"usage_snapshot",
+              "captured_at":"2026-03-01T11:27:45.029Z",
+              "payload":{"foo":"bar"}
+            }]
+            """
+            return (response, Data(body.utf8))
+        }
+
+        let client = makeFactoryClient(session: makeStubSession())
+        XCTAssertThrowsError(try client.fetchSnapshot()) { error in
+            guard case FactoryUsageClientError.missingUsageData = error else {
+                XCTFail("Expected missingUsageData, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testFetchSnapshotSupportsStringFormattedUsageFields() throws {
+        URLProtocolStub.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url ?? URL(string: "https://example.com")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            let body = """
+            [{
+              "connector":"info-bar-web-connector",
+              "provider":"factory",
+              "event":"usage_snapshot",
+              "captured_at":"2026-03-01T11:27:45.029Z",
+              "payload":{
+                "usage":{
+                  "endDate":"1775026800000",
+                  "standard":{
+                    "totalAllowance":"20,000,000",
+                    "orgTotalTokensUsed":"4,500,000"
+                  }
+                },
+                "window_title":" Factory Monthly Quota ",
+                "token_unit":" tokens "
+              }
+            }]
+            """
+            return (response, Data(body.utf8))
+        }
+
+        let snapshot = try makeFactoryClient(session: makeStubSession()).fetchSnapshot()
+        XCTAssertEqual(snapshot.windows.first?.usedPercent, 23)
+        XCTAssertEqual(snapshot.windows.first?.used, 4_500_000)
+        XCTAssertEqual(snapshot.windows.first?.limit, 20_000_000)
+        XCTAssertEqual(snapshot.windows.first?.remaining, 15_500_000)
+        XCTAssertEqual(snapshot.windows.first?.windowTitle, "Factory Monthly Quota")
+        XCTAssertEqual(snapshot.windows.first?.unit, "tokens")
     }
 
     func testFetchSnapshotReadsSupabaseConfigFromConfigFile() throws {
@@ -215,6 +309,7 @@ final class FactoryUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.providerID, "factory")
         XCTAssertEqual(snapshot.windows.first?.usedPercent, 38)
         XCTAssertEqual(snapshot.windows.first?.resetAt, Date(timeIntervalSince1970: 1_775_026_800))
+        XCTAssertEqual(snapshot.windows.first?.windowTitle, "Monthly tokens")
     }
 
     func testFactoryBrowserCookieImporterUsesReusableCollector() throws {
@@ -241,6 +336,20 @@ final class FactoryUsageClientTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]
         return URLSession(configuration: configuration)
+    }
+
+    private func makeFactoryClient(session: URLSession) -> FactoryUsageClient {
+        let missingConfigPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("infobar-missing-\(UUID().uuidString).json")
+            .path
+        return FactoryUsageClient(
+            environment: [
+                "INFOBAR_CONFIG_FILE": missingConfigPath,
+                "INFOBAR_SUPABASE_URL": "https://unit-test.supabase.co",
+                "INFOBAR_SUPABASE_ANON_KEY": "test-anon-key"
+            ],
+            session: session
+        )
     }
 }
 

@@ -178,3 +178,30 @@ Expected logs:
 3. Reload extension.
 
 No pipeline code changes are required if target responses are JSON.
+
+## InfoBar app integration contract
+
+For the current `factory` provider, the desktop app reads from `connector_events` with:
+
+- `connector=info-bar-web-connector`
+- `provider=factory`
+- `event=usage_snapshot`
+- latest row by `captured_at desc`
+
+To keep Settings UI rendering stable, payload should expose at least enough data to derive:
+
+- `used` / `limit` / `remaining` (preferred), or
+- `usedPercent` + one absolute quantity so app-side fallback can infer the rest
+
+Recommended payload keys (first-priority path):
+
+- `usage.standard.orgTotalTokensUsed` -> used
+- `usage.standard.totalAllowance` -> limit
+- `usage.standard.remainingAllowance` -> remaining
+- `usage.standard.usedRatio` -> usedPercent
+- `usage.endDate` -> resetAt
+
+The app accepts multiple alias fields and applies fallback inference. See:
+
+- [`docs/provider-usage-mapping.md`](../../docs/provider-usage-mapping.md)
+- [`docs/connector-ui-dataflow.md`](../../docs/connector-ui-dataflow.md)

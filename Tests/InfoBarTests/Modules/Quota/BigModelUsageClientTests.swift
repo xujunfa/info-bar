@@ -56,11 +56,54 @@ final class BigModelUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.windows[0].id, "tokens_limit")
         XCTAssertEqual(snapshot.windows[0].label, "H")
         XCTAssertEqual(snapshot.windows[0].usedPercent, 25)
+        XCTAssertEqual(snapshot.windows[0].used, 250_000)
+        XCTAssertEqual(snapshot.windows[0].limit, 1_000_000)
+        XCTAssertEqual(snapshot.windows[0].remaining, 750_000)
+        XCTAssertEqual(snapshot.windows[0].unit, "tokens")
+        XCTAssertEqual(snapshot.windows[0].windowTitle, "Token quota")
+        XCTAssertEqual(snapshot.windows[0].metadata?["plan_name"], "Free")
         XCTAssertEqual(snapshot.windows[0].resetAt, Date(timeIntervalSince1970: 1_768_000_000))
         XCTAssertEqual(snapshot.windows[1].id, "time_limit")
         XCTAssertEqual(snapshot.windows[1].label, "W")
         XCTAssertEqual(snapshot.windows[1].usedPercent, 0)
+        XCTAssertEqual(snapshot.windows[1].used, 0)
+        XCTAssertEqual(snapshot.windows[1].limit, 1)
+        XCTAssertEqual(snapshot.windows[1].remaining, 1)
+        XCTAssertEqual(snapshot.windows[1].unit, "minutes")
+        XCTAssertEqual(snapshot.windows[1].windowTitle, "Time quota")
         XCTAssertEqual(snapshot.windows[1].resetAt, Date(timeIntervalSince1970: 1_768_600_000))
+    }
+
+    func testMapsPercentageOnlyLimitWhenAbsoluteFieldsMissing() throws {
+        let json = """
+        {
+          "code": 200,
+          "msg": "ok",
+          "success": true,
+          "data": {
+            "limits": [
+              {
+                "type": "TOKENS_LIMIT",
+                "percentage": 64,
+                "nextResetTime": 1768000000
+              }
+            ]
+          }
+        }
+        """
+
+        let response = try BigModelUsageClient.decodeResponse(data: Data(json.utf8))
+        let snapshot = try BigModelUsageClient.mapToSnapshot(
+            response: response,
+            fetchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        XCTAssertEqual(snapshot.windows.count, 1)
+        XCTAssertEqual(snapshot.windows[0].usedPercent, 64)
+        XCTAssertEqual(snapshot.windows[0].resetAt, Date(timeIntervalSince1970: 1_768_000_000))
+        XCTAssertNil(snapshot.windows[0].used)
+        XCTAssertNil(snapshot.windows[0].limit)
+        XCTAssertNil(snapshot.windows[0].remaining)
     }
 
     func testThrowsApiFailureWhenResponseIsNotSuccess() throws {

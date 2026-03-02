@@ -10,16 +10,34 @@ struct BigModelUsageResponse: Decodable {
     let data: DataEnvelope?
 
     struct DataEnvelope: Decodable {
-        let limits: [Limit]
+        let planName: String?
+        let limits: [Limit]?
     }
 
     struct Limit: Decodable {
         let type: String
-        let usage: Int?
-        let currentValue: Int?
-        let remaining: Int?
+        let usage: Double?
+        let currentValue: Double?
+        let remaining: Double?
         let percentage: Double?
-        let nextResetTime: Int?
+        let nextResetTime: Double?
+        let unitCode: Int?
+        let number: Double?
+        let title: String?
+        let periodName: String?
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case usage
+            case currentValue
+            case remaining
+            case percentage
+            case nextResetTime
+            case unitCode = "unit"
+            case number
+            case title
+            case periodName
+        }
     }
 }
 
@@ -134,21 +152,31 @@ struct BigModelUsageClient: QuotaSnapshotFetching {
         }
 
         var windows: [QuotaWindow] = []
-        if let tokenLimit = limits.first(where: { $0.type == "TOKENS_LIMIT" }) {
-            windows.append(QuotaWindow(
+        if let tokenLimit = limits.first(where: isTokenLimit) {
+            if let mapped = mapWindow(
+                limit: tokenLimit,
                 id: "tokens_limit",
                 label: "H",
-                usedPercent: usedPercent(limit: tokenLimit),
-                resetAt: resetAt(limit: tokenLimit, fetchedAt: fetchedAt)
-            ))
+                fallbackUnit: "tokens",
+                fallbackTitle: "Token quota",
+                planName: response.data?.planName,
+                fetchedAt: fetchedAt
+            ) {
+                windows.append(mapped)
+            }
         }
-        if let timeLimit = limits.first(where: { $0.type == "TIME_LIMIT" }) {
-            windows.append(QuotaWindow(
+        if let timeLimit = limits.first(where: isTimeLimit) {
+            if let mapped = mapWindow(
+                limit: timeLimit,
                 id: "time_limit",
                 label: "W",
-                usedPercent: usedPercent(limit: timeLimit),
-                resetAt: resetAt(limit: timeLimit, fetchedAt: fetchedAt)
-            ))
+                fallbackUnit: "minutes",
+                fallbackTitle: "Time quota",
+                planName: response.data?.planName,
+                fetchedAt: fetchedAt
+            ) {
+                windows.append(mapped)
+            }
         }
 
         guard !windows.isEmpty else {
@@ -157,26 +185,147 @@ struct BigModelUsageClient: QuotaSnapshotFetching {
         return QuotaSnapshot(providerID: "bigmodel", windows: windows, fetchedAt: fetchedAt)
     }
 
-    private static func usedPercent(limit: BigModelUsageResponse.Limit) -> Int {
-        if let usage = limit.usage, usage > 0 {
-            if let remaining = limit.remaining {
-                let used = max(0, min(usage, usage - remaining))
-                return Int((Double(used) / Double(usage) * 100).rounded())
+    private static func isTokenLimit(_ limit: BigModelUsageResponse.Limit) -> Bool {
+        let normalizedType = limit.type.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return normalizedType.contains("TOKEN")
+    }
+
+    private static func isTimeLimit(_ limit: BigModelUsageResponse.Limit) -> Bool {
+        let normalizedType = limit.type.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return normalizedType.contains("TIME")
+    }
+
+    private static func mapWindow(
+        limit: BigModelUsageResponse.Limit,
+        id: String,
+        label: String,
+        fallbackUnit: String,
+        fallbackTitle: String,
+        planName: String?,
+        fetchedAt: Date
+    ) -> QuotaWindow? {
+        let normalizedLimit = positiveNumber(limit.usage) ?? combinedLimit(used: limit.currentValue, remaining: limit.remaining)
+        let normalizedUsed = clamped(limit.currentValue, by: normalizedLimit) ?? inferredUsed(limit: normalizedLimit, remaining: limit.remaining)
+        let normalizedRemaining = clamped(limit.remaining, by: normalizedLimit) ?? inferredRemaining(limit: normalizedLimit, used: normalizedUsed)
+        guard let usedPercent = usedPercent(
+            explicit: limit.percentage,
+            used: normalizedUsed,
+            limit: normalizedLimit,
+            remaining: normalizedRemaining
+        ) else {
+            return nil
+        }
+
+        var metadata: [String: String] = [:]
+        metadata["limit_type"] = limit.type
+        if let unitCode = limit.unitCode {
+            metadata["unit_code"] = String(unitCode)
+        }
+        if let number = positiveNumber(limit.number) {
+            metadata["cycle_count"] = String(Int(number.rounded()))
+        }
+        if let planName = normalizedText(planName) {
+            metadata["plan_name"] = planName
+        }
+
+        return QuotaWindow(
+            id: id,
+            label: label,
+            usedPercent: usedPercent,
+            resetAt: resetAt(limit: limit, fetchedAt: fetchedAt),
+            used: normalizedUsed,
+            limit: normalizedLimit,
+            remaining: normalizedRemaining,
+            unit: unit(from: limit) ?? fallbackUnit,
+            windowTitle: normalizedText(limit.title) ?? normalizedText(limit.periodName) ?? fallbackTitle,
+            metadata: metadata.isEmpty ? nil : metadata
+        )
+    }
+
+    private static func positiveNumber(_ value: Double?) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return max(0, value)
+    }
+
+    private static func clamped(_ value: Double?, by limit: Double?) -> Double? {
+        guard let value = positiveNumber(value) else { return nil }
+        guard let limit = positiveNumber(limit), limit > 0 else {
+            return value
+        }
+        return min(value, limit)
+    }
+
+    private static func combinedLimit(used: Double?, remaining: Double?) -> Double? {
+        guard let used = positiveNumber(used), let remaining = positiveNumber(remaining) else { return nil }
+        return used + remaining
+    }
+
+    private static func inferredUsed(limit: Double?, remaining: Double?) -> Double? {
+        guard let limit = positiveNumber(limit), let remaining = positiveNumber(remaining) else { return nil }
+        return max(0, limit - remaining)
+    }
+
+    private static func inferredRemaining(limit: Double?, used: Double?) -> Double? {
+        guard let limit = positiveNumber(limit), let used = positiveNumber(used) else { return nil }
+        return max(0, limit - used)
+    }
+
+    private static func usedPercent(
+        explicit: Double?,
+        used: Double?,
+        limit: Double?,
+        remaining: Double?
+    ) -> Int? {
+        if let explicit = positiveNumber(explicit) {
+            return Int(explicit.rounded())
+        }
+        if let limit = positiveNumber(limit), limit > 0 {
+            if let used = positiveNumber(used) {
+                return Int((min(used, limit) / limit * 100).rounded())
             }
-            if let current = limit.currentValue {
-                let used = max(0, min(usage, current))
-                return Int((Double(used) / Double(usage) * 100).rounded())
+            if let remaining = positiveNumber(remaining) {
+                return Int((max(0, limit - remaining) / limit * 100).rounded())
             }
         }
-        if let percentage = limit.percentage {
-            return Int(percentage.rounded())
+        if let used = positiveNumber(used), let remaining = positiveNumber(remaining), used + remaining > 0 {
+            return Int((used / (used + remaining) * 100).rounded())
         }
-        return 0
+        return nil
     }
 
     private static func resetAt(limit: BigModelUsageResponse.Limit, fetchedAt: Date) -> Date {
-        guard let millis = limit.nextResetTime else { return fetchedAt }
-        return Date(timeIntervalSince1970: TimeInterval(millis) / 1000)
+        guard let raw = positiveNumber(limit.nextResetTime), raw > 0 else { return fetchedAt }
+        let seconds = raw > 1_000_000_000_000 ? raw / 1000 : raw
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    private static func unit(from limit: BigModelUsageResponse.Limit) -> String? {
+        if let code = limit.unitCode {
+            switch code {
+            case 3:
+                return "tokens"
+            case 1:
+                return "minutes"
+            default:
+                break
+            }
+        }
+
+        let normalizedType = limit.type.uppercased()
+        if normalizedType.contains("TOKEN") {
+            return "tokens"
+        }
+        if normalizedType.contains("TIME") {
+            return "minutes"
+        }
+        return nil
+    }
+
+    private static func normalizedText(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
     }
 
     private func resolveQuotaURL(environment: [String: String]) -> URL {

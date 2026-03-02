@@ -29,6 +29,12 @@ final class MiniMaxUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.windows[0].id, "hour_5")
         XCTAssertEqual(snapshot.windows[0].label, "H")
         XCTAssertEqual(snapshot.windows[0].usedPercent, 10)
+        XCTAssertEqual(snapshot.windows[0].used, 150)
+        XCTAssertEqual(snapshot.windows[0].limit, 1_500)
+        XCTAssertEqual(snapshot.windows[0].remaining, 1_350)
+        XCTAssertEqual(snapshot.windows[0].unit, "requests")
+        XCTAssertEqual(snapshot.windows[0].windowTitle, "Current interval")
+        XCTAssertEqual(snapshot.windows[0].metadata?["model_name"], "MiniMax-M2")
         XCTAssertEqual(snapshot.windows[0].resetAt, fetchedAt.addingTimeInterval(5_400))
     }
 
@@ -57,6 +63,47 @@ final class MiniMaxUsageClientTests: XCTestCase {
         )
 
         XCTAssertEqual(snapshot.windows[0].usedPercent, 0)
+        XCTAssertEqual(snapshot.windows[0].used, 0)
+        XCTAssertEqual(snapshot.windows[0].remaining, 1_500)
+    }
+
+    func testMapsExplicitUsedCountAndCycleMetadata() throws {
+        let json = """
+        {
+          "base_resp": {
+            "status_code": 0,
+            "status_msg": "success"
+          },
+          "model_remains": [
+            {
+              "model_name": "MiniMax-M2",
+              "current_interval_total_count": "2000",
+              "current_interval_used_count": 500,
+              "remains_time": 300000,
+              "reset_at": 1768000000,
+              "period_type": "week",
+              "quota_unit": "tokens"
+            }
+          ]
+        }
+        """
+
+        let response = try MiniMaxUsageClient.decodeResponse(data: Data(json.utf8))
+        let snapshot = try MiniMaxUsageClient.mapToSnapshot(
+            response: response,
+            fetchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        XCTAssertEqual(snapshot.windows[0].id, "week")
+        XCTAssertEqual(snapshot.windows[0].label, "W")
+        XCTAssertEqual(snapshot.windows[0].usedPercent, 25)
+        XCTAssertEqual(snapshot.windows[0].used, 500)
+        XCTAssertEqual(snapshot.windows[0].limit, 2_000)
+        XCTAssertEqual(snapshot.windows[0].remaining, 1_500)
+        XCTAssertEqual(snapshot.windows[0].unit, "tokens")
+        XCTAssertEqual(snapshot.windows[0].windowTitle, "Weekly usage")
+        XCTAssertEqual(snapshot.windows[0].resetAt, Date(timeIntervalSince1970: 1_768_000_000))
+        XCTAssertEqual(snapshot.windows[0].metadata?["period_type"], "week")
     }
 
     func testThrowsApiFailureWhenStatusCodeNonZero() throws {

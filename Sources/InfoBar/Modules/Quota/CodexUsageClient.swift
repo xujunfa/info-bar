@@ -5,9 +5,11 @@ import FoundationNetworking
 
 struct CodexUsageResponse: Decodable {
     let rateLimit: RateLimitDetails?
+    let planType: String?
 
     enum CodingKeys: String, CodingKey {
         case rateLimit = "rate_limit"
+        case planType = "plan_type"
     }
 
     struct RateLimitDetails: Decodable {
@@ -21,12 +23,103 @@ struct CodexUsageResponse: Decodable {
     }
 
     struct WindowSnapshot: Decodable {
-        let usedPercent: Int
-        let resetAt: Int
+        let usedPercent: Double?
+        let resetAt: Double?
+        let limitWindowSeconds: Double?
+        let used: Double?
+        let limit: Double?
+        let remaining: Double?
+        let unit: String?
+        let windowTitle: String?
+        let periodType: String?
 
-        enum CodingKeys: String, CodingKey {
-            case usedPercent = "used_percent"
-            case resetAt = "reset_at"
+        private struct DynamicCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int?
+
+            init?(stringValue: String) {
+                self.stringValue = stringValue
+                self.intValue = nil
+            }
+
+            init?(intValue: Int) {
+                self.stringValue = "\(intValue)"
+                self.intValue = intValue
+            }
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+            self.usedPercent = Self.decodeNumber(
+                in: container,
+                keys: ["used_percent", "usedPercent", "usage_percent", "percent"]
+            )
+            self.resetAt = Self.decodeNumber(
+                in: container,
+                keys: ["reset_at", "resetAt", "next_reset_at", "nextResetAt", "window_end", "windowEnd"]
+            )
+            self.limitWindowSeconds = Self.decodeNumber(
+                in: container,
+                keys: ["limit_window_seconds", "window_seconds", "windowSeconds", "window_duration_seconds"]
+            )
+            self.used = Self.decodeNumber(
+                in: container,
+                keys: ["used", "usage", "used_count", "usedCount", "current_usage", "currentUsage"]
+            )
+            self.limit = Self.decodeNumber(
+                in: container,
+                keys: ["limit", "total", "quota", "total_quota", "totalQuota"]
+            )
+            self.remaining = Self.decodeNumber(
+                in: container,
+                keys: ["remaining", "remaining_quota", "remainingQuota", "left", "left_count", "leftCount"]
+            )
+            self.unit = Self.decodeString(in: container, keys: ["unit"])
+            self.windowTitle = Self.decodeString(
+                in: container,
+                keys: ["window_title", "windowTitle", "title", "name"]
+            )
+            self.periodType = Self.decodeString(
+                in: container,
+                keys: ["period_type", "periodType", "id", "type"]
+            )
+        }
+
+        private static func decodeNumber(
+            in container: KeyedDecodingContainer<DynamicCodingKey>,
+            keys: [String]
+        ) -> Double? {
+            for key in keys {
+                guard let codingKey = DynamicCodingKey(stringValue: key) else { continue }
+                if let number = try? container.decode(Double.self, forKey: codingKey), number.isFinite {
+                    return number
+                }
+                if let intValue = try? container.decode(Int.self, forKey: codingKey) {
+                    return Double(intValue)
+                }
+                if let stringValue = try? container.decode(String.self, forKey: codingKey) {
+                    let trimmed = stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if let parsed = Double(trimmed), parsed.isFinite {
+                        return parsed
+                    }
+                }
+            }
+            return nil
+        }
+
+        private static func decodeString(
+            in container: KeyedDecodingContainer<DynamicCodingKey>,
+            keys: [String]
+        ) -> String? {
+            for key in keys {
+                guard let codingKey = DynamicCodingKey(stringValue: key) else { continue }
+                guard let value = try? container.decode(String.self, forKey: codingKey) else { continue }
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+            return nil
         }
     }
 }
@@ -126,29 +219,150 @@ public struct CodexUsageClient: QuotaSnapshotFetching {
     }
 
     static func mapToSnapshot(response: CodexUsageResponse, fetchedAt: Date) throws -> QuotaSnapshot {
-        guard let window = response.rateLimit?.primaryWindow else {
+        guard let primary = response.rateLimit?.primaryWindow,
+              let primaryWindow = mapWindow(
+                primary,
+                id: "five_hour",
+                label: "H",
+                defaultTitle: "5-hour usage",
+                fallbackDurationSeconds: 5 * 3_600,
+                planType: response.planType,
+                fetchedAt: fetchedAt
+              ) else {
             throw CodexUsageClientError.missingPrimaryWindow
         }
 
-        var windows: [QuotaWindow] = [
-            QuotaWindow(
-                id: "five_hour",
-                label: "H",
-                usedPercent: window.usedPercent,
-                resetAt: Date(timeIntervalSince1970: TimeInterval(window.resetAt))
-            )
-        ]
+        var windows: [QuotaWindow] = [primaryWindow]
 
         if let weeklyWindow = response.rateLimit?.secondaryWindow {
-            windows.append(QuotaWindow(
+            if let mappedWeekly = mapWindow(
+                weeklyWindow,
                 id: "weekly",
                 label: "W",
-                usedPercent: weeklyWindow.usedPercent,
-                resetAt: Date(timeIntervalSince1970: TimeInterval(weeklyWindow.resetAt))
-            ))
+                defaultTitle: "Weekly usage",
+                fallbackDurationSeconds: 7 * 24 * 3_600,
+                planType: response.planType,
+                fetchedAt: fetchedAt
+            ) {
+                windows.append(mappedWeekly)
+            }
         }
 
         return QuotaSnapshot(providerID: "codex", windows: windows, fetchedAt: fetchedAt)
+    }
+
+    private static func mapWindow(
+        _ source: CodexUsageResponse.WindowSnapshot,
+        id: String,
+        label: String,
+        defaultTitle: String,
+        fallbackDurationSeconds: Double,
+        planType: String?,
+        fetchedAt: Date
+    ) -> QuotaWindow? {
+        let normalizedLimit = positiveNumber(source.limit) ?? combinedLimit(used: source.used, remaining: source.remaining)
+        let normalizedUsed = positiveNumber(source.used) ?? inferredUsed(limit: normalizedLimit, remaining: source.remaining)
+        let normalizedRemaining = positiveNumber(source.remaining)
+        let usedPercent = usedPercent(
+            explicitPercent: source.usedPercent,
+            used: normalizedUsed,
+            limit: normalizedLimit,
+            remaining: normalizedRemaining
+        )
+
+        guard let usedPercent else {
+            return nil
+        }
+
+        var metadata: [String: String] = [:]
+        if let seconds = positiveNumber(source.limitWindowSeconds) {
+            metadata["window_seconds"] = String(Int(seconds.rounded()))
+        }
+        if let planType = normalizedText(planType) {
+            metadata["plan_type"] = planType
+        }
+        if let periodType = normalizedText(source.periodType) {
+            metadata["period_type"] = periodType
+        }
+
+        return QuotaWindow(
+            id: id,
+            label: label,
+            usedPercent: usedPercent,
+            resetAt: resolveResetAt(
+                explicitResetAt: source.resetAt,
+                fallbackDurationSeconds: source.limitWindowSeconds ?? fallbackDurationSeconds,
+                fetchedAt: fetchedAt
+            ),
+            used: normalizedUsed,
+            limit: normalizedLimit,
+            remaining: normalizedRemaining,
+            unit: normalizedText(source.unit),
+            windowTitle: source.windowTitle ?? defaultTitle,
+            metadata: metadata.isEmpty ? nil : metadata
+        )
+    }
+
+    private static func positiveNumber(_ value: Double?) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return max(0, value)
+    }
+
+    private static func combinedLimit(used: Double?, remaining: Double?) -> Double? {
+        guard let used = positiveNumber(used), let remaining = positiveNumber(remaining) else { return nil }
+        return used + remaining
+    }
+
+    private static func inferredUsed(limit: Double?, remaining: Double?) -> Double? {
+        guard let limit = positiveNumber(limit), let remaining = positiveNumber(remaining) else { return nil }
+        return max(0, limit - remaining)
+    }
+
+    private static func usedPercent(
+        explicitPercent: Double?,
+        used: Double?,
+        limit: Double?,
+        remaining: Double?
+    ) -> Int? {
+        if let explicit = positiveNumber(explicitPercent) {
+            return Int(explicit.rounded())
+        }
+        if let limit = positiveNumber(limit), limit > 0 {
+            if let used = positiveNumber(used) {
+                return Int((min(used, limit) / limit * 100).rounded())
+            }
+            if let remaining = positiveNumber(remaining) {
+                return Int(((max(0, limit - remaining)) / limit * 100).rounded())
+            }
+        }
+        if let used = positiveNumber(used), let remaining = positiveNumber(remaining) {
+            let total = used + remaining
+            guard total > 0 else { return nil }
+            return Int((used / total * 100).rounded())
+        }
+        return nil
+    }
+
+    private static func resolveResetAt(
+        explicitResetAt: Double?,
+        fallbackDurationSeconds: Double?,
+        fetchedAt: Date
+    ) -> Date {
+        if let explicitResetAt = positiveNumber(explicitResetAt), explicitResetAt > 0 {
+            let seconds = explicitResetAt > 1_000_000_000_000 ? explicitResetAt / 1000 : explicitResetAt
+            return Date(timeIntervalSince1970: seconds)
+        }
+        if let fallbackDurationSeconds = positiveNumber(fallbackDurationSeconds), fallbackDurationSeconds > 0 {
+            return fetchedAt.addingTimeInterval(fallbackDurationSeconds)
+        }
+        return fetchedAt
+    }
+
+    private static func normalizedText(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
     }
 
     private static func resolveUsageURL(environment: [String: String]) -> URL {
