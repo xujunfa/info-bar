@@ -156,6 +156,7 @@ private final class ProviderListViewController: NSViewController,
         tableView.headerView = nil
         tableView.rowHeight = SettingsTheme.Layout.listRowHeight
         tableView.selectionHighlightStyle = .none
+        tableView.allowsEmptySelection = false
         tableView.backgroundColor = .clear
         tableView.intercellSpacing = NSSize(width: 0, height: SettingsTheme.Layout.listRowSpacing)
         tableView.dataSource = self
@@ -256,9 +257,16 @@ private final class ProviderListViewController: NSViewController,
         if row >= 0, row < currentViewModels.count {
             selectedProviderID = currentViewModels[row].providerID
             onSelectionChanged?(currentViewModels[row])
-        } else {
+        } else if currentViewModels.isEmpty {
             selectedProviderID = nil
             onSelectionChanged?(nil)
+        } else if let preservedID = selectedProviderID,
+                  let idx = currentViewModels.firstIndex(where: { $0.providerID == preservedID }) {
+            tableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
+            return
+        } else {
+            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+            return
         }
 
         // Keep hover state in sync after click-based selection changes.
@@ -268,6 +276,21 @@ private final class ProviderListViewController: NSViewController,
         hoveredRow = rowUnderPointer >= 0 ? rowUnderPointer : nil
 
         applyRowStates()
+    }
+
+    func tableView(_ tableView: NSTableView,
+                   selectionIndexesForProposedSelection proposedSelectionIndexes: IndexSet) -> IndexSet {
+        guard !proposedSelectionIndexes.isEmpty else {
+            if currentViewModels.isEmpty {
+                return []
+            }
+            if let selectedProviderID,
+               let idx = currentViewModels.firstIndex(where: { $0.providerID == selectedProviderID }) {
+                return IndexSet(integer: idx)
+            }
+            return IndexSet(integer: 0)
+        }
+        return proposedSelectionIndexes
     }
 
     // MARK: Drag & Drop
@@ -416,8 +439,9 @@ private final class ProviderRowView: NSTableCellView {
     private let dragHandle = NSImageView()
     private let iconView = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
+    private let summaryLabel = NSTextField(labelWithString: "")
+    private let titleStack = NSStackView()
     private let statusDot = NSView()
-
     private var statusColor = SettingsTheme.Color.statusHidden
 
     override init(frame: NSRect) {
@@ -446,7 +470,19 @@ private final class ProviderRowView: NSTableCellView {
         nameLabel.font = SettingsTheme.Typography.providerName
         nameLabel.textColor = SettingsTheme.Color.primaryText
         nameLabel.lineBreakMode = .byTruncatingTail
-        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        summaryLabel.font = SettingsTheme.Typography.caption
+        summaryLabel.textColor = SettingsTheme.Color.tertiaryText
+        summaryLabel.lineBreakMode = .byTruncatingTail
+        summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        titleStack.orientation = .vertical
+        titleStack.alignment = .leading
+        titleStack.spacing = 1
+        titleStack.translatesAutoresizingMaskIntoConstraints = false
+        titleStack.addArrangedSubview(nameLabel)
+        titleStack.addArrangedSubview(summaryLabel)
 
         statusDot.wantsLayer = true
         statusDot.layer?.cornerRadius = SettingsTheme.Radius.statusDot
@@ -456,7 +492,7 @@ private final class ProviderRowView: NSTableCellView {
 
         addSubview(dragHandle)
         addSubview(iconView)
-        addSubview(nameLabel)
+        addSubview(titleStack)
         addSubview(statusDot)
 
         NSLayoutConstraint.activate([
@@ -470,13 +506,12 @@ private final class ProviderRowView: NSTableCellView {
             iconView.widthAnchor.constraint(equalToConstant: 20),
             iconView.heightAnchor.constraint(equalToConstant: 20),
 
-            nameLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 8),
-            nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusDot.leadingAnchor,
-                                                constant: -8),
+            titleStack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 8),
+            titleStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleStack.trailingAnchor.constraint(lessThanOrEqualTo: statusDot.leadingAnchor, constant: -8),
 
-            statusDot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
-            statusDot.centerYAnchor.constraint(equalTo: nameLabel.centerYAnchor),
+            statusDot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            statusDot.centerYAnchor.constraint(equalTo: centerYAnchor),
             statusDot.widthAnchor.constraint(equalToConstant: 9),
             statusDot.heightAnchor.constraint(equalToConstant: 9),
         ])
@@ -484,20 +519,10 @@ private final class ProviderRowView: NSTableCellView {
 
     func configure(viewModel: SettingsProviderViewModel) {
         nameLabel.stringValue = providerDisplayName(for: viewModel.providerID)
+        summaryLabel.stringValue = viewModel.listSummary
         iconView.image = providerIconImage(for: viewModel.providerID)
-
-        let hasCriticalUsage = viewModel.windows.contains { $0.usedPercent >= 90 }
-        if !viewModel.isVisible {
-            statusColor = SettingsTheme.Color.statusHidden
-            statusDot.toolTip = "Hidden from menu bar"
-        } else if hasCriticalUsage {
-            statusColor = SettingsTheme.Color.statusWarning
-            statusDot.toolTip = "High quota usage"
-        } else {
-            statusColor = SettingsTheme.Color.statusVisible
-            statusDot.toolTip = "Visible in menu bar"
-        }
-
+        statusColor = viewModel.isVisible ? SettingsTheme.Color.statusVisible : SettingsTheme.Color.statusHidden
+        statusDot.toolTip = viewModel.isVisible ? "Visible in menu bar" : "Hidden from menu bar"
         statusDot.layer?.backgroundColor = statusColor.cgColor
     }
 
@@ -508,7 +533,7 @@ private final class ProviderRowView: NSTableCellView {
 
         iconView.contentTintColor = emphasized ? SettingsTheme.Color.primaryText : SettingsTheme.Color.secondaryText
         nameLabel.textColor = emphasized ? SettingsTheme.Color.primaryText : SettingsTheme.Color.secondaryText
-
+        summaryLabel.textColor = emphasized ? SettingsTheme.Color.secondaryText : SettingsTheme.Color.tertiaryText
         statusDot.layer?.backgroundColor = statusColor.cgColor
         statusDot.layer?.borderWidth = emphasized ? 1.2 : 1
     }
@@ -521,6 +546,7 @@ private final class ProviderDetailViewController: NSViewController {
     var onRefreshRequested: ((String) -> Void)?
     private var toggleBridge: ToggleSwitchBridge?
     private var refreshBridge: RefreshButtonBridge?
+    private var refreshFeedbackResetWorkItem: DispatchWorkItem?
 
     override func loadView() {
         let effectView = NSVisualEffectView()
@@ -534,6 +560,8 @@ private final class ProviderDetailViewController: NSViewController {
         view.subviews.forEach { $0.removeFromSuperview() }
         toggleBridge = nil
         refreshBridge = nil
+        refreshFeedbackResetWorkItem?.cancel()
+        refreshFeedbackResetWorkItem = nil
 
         guard let vm = viewModel else {
             let placeholder = makeSelectionPlaceholderView()
@@ -581,11 +609,11 @@ private final class ProviderDetailViewController: NSViewController {
         divider1.widthAnchor.constraint(equalTo: container.widthAnchor).isActive = true
         container.setCustomSpacing(12, after: divider1)
 
-        let usageLabel = NSTextField(labelWithString: "USAGE")
+        let usageLabel = NSTextField(labelWithString: "USAGE WINDOWS")
         usageLabel.font = SettingsTheme.Typography.section
         usageLabel.textColor = SettingsTheme.Color.secondaryText
         container.addArrangedSubview(usageLabel)
-        container.setCustomSpacing(8, after: usageLabel)
+        container.setCustomSpacing(10, after: usageLabel)
 
         if vm.windows.isEmpty {
             let placeholder = makeUsagePlaceholderView(fetchedAt: vm.fetchedAt)
@@ -597,19 +625,10 @@ private final class ProviderDetailViewController: NSViewController {
                 let row = makeWindowRow(window: window)
                 container.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: container.widthAnchor).isActive = true
-                container.setCustomSpacing(6, after: row)
+                container.setCustomSpacing(8, after: row)
             }
             container.setCustomSpacing(12, after: container.arrangedSubviews.last ?? usageLabel)
         }
-
-        let divider2 = makeDivider()
-        container.addArrangedSubview(divider2)
-        divider2.widthAnchor.constraint(equalTo: container.widthAnchor).isActive = true
-        container.setCustomSpacing(12, after: divider2)
-
-        let toggleRow = makeToggleRow(vm: vm)
-        container.addArrangedSubview(toggleRow)
-        toggleRow.widthAnchor.constraint(equalTo: container.widthAnchor).isActive = true
     }
 
     private func makeSelectionPlaceholderView() -> NSView {
@@ -725,6 +744,16 @@ private final class ProviderDetailViewController: NSViewController {
         nameLabel.font = SettingsTheme.Typography.providerTitle
         nameLabel.textColor = SettingsTheme.Color.primaryText
 
+        let idText: String
+        if let accountText = vm.accountText {
+            idText = "ID: \(vm.providerID)  ·  Account: \(accountText)"
+        } else {
+            idText = "ID: \(vm.providerID)"
+        }
+        let idLabel = NSTextField(labelWithString: idText)
+        idLabel.font = SettingsTheme.Typography.idText
+        idLabel.textColor = SettingsTheme.Color.tertiaryText
+
         let updatedText: String
         if let fetchedAt = vm.fetchedAt {
             updatedText = "Updated: \(formatAgo(from: fetchedAt))"
@@ -735,10 +764,10 @@ private final class ProviderDetailViewController: NSViewController {
         updatedLabel.font = SettingsTheme.Typography.caption
         updatedLabel.textColor = SettingsTheme.Color.secondaryText
 
-        let titleStack = NSStackView(views: [nameLabel, updatedLabel])
+        let titleStack = NSStackView(views: [nameLabel, idLabel, updatedLabel])
         titleStack.orientation = .vertical
         titleStack.alignment = .leading
-        titleStack.spacing = 3
+        titleStack.spacing = 2
 
         let refreshImage = NSImage(
             systemSymbolName: "arrow.clockwise",
@@ -749,24 +778,65 @@ private final class ProviderDetailViewController: NSViewController {
         let refreshButton = NSButton(image: refreshImage, target: nil, action: nil)
         refreshButton.title = ""
         refreshButton.imagePosition = .imageOnly
-        refreshButton.bezelStyle = .texturedRounded
+        refreshButton.bezelStyle = .regularSquare
         refreshButton.controlSize = .small
         refreshButton.toolTip = "Refresh usage"
+        refreshButton.contentTintColor = SettingsTheme.Color.secondaryText
+        refreshButton.setButtonType(.momentaryPushIn)
 
-        let bridge = RefreshButtonBridge(providerID: vm.providerID) { [weak self] id in
-            self?.onRefreshRequested?(id)
+        let refreshLoadingIndicator = NSProgressIndicator()
+        refreshLoadingIndicator.style = .spinning
+        refreshLoadingIndicator.controlSize = .small
+        refreshLoadingIndicator.isDisplayedWhenStopped = false
+        refreshLoadingIndicator.isHidden = true
+        refreshLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            refreshButton.widthAnchor.constraint(equalToConstant: 18),
+            refreshButton.heightAnchor.constraint(equalToConstant: 18),
+            refreshLoadingIndicator.widthAnchor.constraint(equalToConstant: 18),
+            refreshLoadingIndicator.heightAnchor.constraint(equalToConstant: 18),
+        ])
+
+        let bridge = RefreshButtonBridge(providerID: vm.providerID) { [weak self, weak refreshButton, weak refreshLoadingIndicator] id in
+            guard let self else { return }
+            if let refreshButton, let refreshLoadingIndicator {
+                self.applyRefreshFeedback(on: refreshButton, indicator: refreshLoadingIndicator)
+            }
+            self.onRefreshRequested?(id)
         }
         refreshButton.target = bridge
         refreshButton.action = #selector(RefreshButtonBridge.refreshClicked(_:))
         refreshBridge = bridge
 
+        let visibilityToggle = NSSwitch()
+        visibilityToggle.state = vm.isVisible ? .on : .off
+        visibilityToggle.controlSize = .small
+        visibilityToggle.toolTip = "Show in menu bar"
+
+        let toggleBridge = ToggleSwitchBridge(providerID: vm.providerID) { [weak self] id, visible in
+            self?.onVisibilityChanged?(id, visible)
+        }
+        visibilityToggle.target = toggleBridge
+        visibilityToggle.action = #selector(ToggleSwitchBridge.toggled(_:))
+        self.toggleBridge = toggleBridge
+
+        visibilityToggle.setContentHuggingPriority(.required, for: .horizontal)
+        visibilityToggle.setContentCompressionResistancePriority(.required, for: .horizontal)
         refreshButton.setContentHuggingPriority(.required, for: .horizontal)
         refreshButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        refreshLoadingIndicator.setContentHuggingPriority(.required, for: .horizontal)
+        refreshLoadingIndicator.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let controlsStack = NSStackView(views: [visibilityToggle, refreshButton, refreshLoadingIndicator])
+        controlsStack.orientation = .horizontal
+        controlsStack.alignment = .centerY
+        controlsStack.spacing = 6
+        controlsStack.setContentHuggingPriority(.required, for: .horizontal)
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let headerStack = NSStackView(views: [iconView, titleStack, spacer, refreshButton])
+        let headerStack = NSStackView(views: [iconView, titleStack, spacer, controlsStack])
         headerStack.orientation = .horizontal
         headerStack.alignment = .centerY
         headerStack.spacing = 12
@@ -774,10 +844,21 @@ private final class ProviderDetailViewController: NSViewController {
     }
 
     private func makeWindowRow(window: SettingsProviderViewModel.WindowViewModel) -> NSView {
-        let label = NSTextField(labelWithString: window.label)
-        label.font = SettingsTheme.Typography.usageLabel
-        label.textColor = SettingsTheme.Color.primaryText
-        label.setContentHuggingPriority(.required, for: .horizontal)
+        let titleLabel = NSTextField(labelWithString: window.label)
+        titleLabel.font = SettingsTheme.Typography.providerName
+        titleLabel.textColor = SettingsTheme.Color.primaryText
+
+        let percentLabel = NSTextField(labelWithString: "\(window.usedPercent)%")
+        percentLabel.font = SettingsTheme.Typography.usageMetricValue
+        percentLabel.textColor = SettingsTheme.Color.primaryText
+
+        let topSpacer = NSView()
+        topSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let topRow = NSStackView(views: [titleLabel, topSpacer, percentLabel])
+        topRow.orientation = .horizontal
+        topRow.alignment = .centerY
+        topRow.spacing = 8
 
         let progress = NSProgressIndicator()
         progress.style = .bar
@@ -788,60 +869,96 @@ private final class ProviderDetailViewController: NSViewController {
         progress.isIndeterminate = false
         progress.translatesAutoresizingMaskIntoConstraints = false
 
-        let percentLabel = NSTextField(labelWithString: "\(window.usedPercent)%")
-        percentLabel.font = SettingsTheme.Typography.usageLabel
-        percentLabel.textColor = SettingsTheme.Color.primaryText
-        percentLabel.setContentHuggingPriority(.required, for: .horizontal)
+        var metricViews: [NSView] = []
+        if window.usedText != UsageFormatting.unavailableText {
+            metricViews.append(makeMetricBlock(title: "USED", value: window.usedText))
+        }
+        if window.remainingText != UsageFormatting.unavailableText {
+            metricViews.append(makeMetricBlock(title: "REMAINING", value: window.remainingText))
+        }
+        if window.limitText != UsageFormatting.unavailableText {
+            metricViews.append(makeMetricBlock(title: "LIMIT", value: window.limitText))
+        }
+        if let tokenInMillions = window.tokenUsageInMillionsText {
+            metricViews.append(makeMetricBlock(title: "TOKENS (M)", value: tokenInMillions))
+        }
 
-        let absoluteLabel = NSTextField(labelWithString: window.absoluteUsageText)
-        absoluteLabel.font = SettingsTheme.Typography.caption
-        absoluteLabel.textColor = SettingsTheme.Color.secondaryText
-        absoluteLabel.setContentHuggingPriority(.required, for: .horizontal)
+        let resetLabel = NSTextField(labelWithString: window.resetText)
+        resetLabel.font = SettingsTheme.Typography.caption
+        resetLabel.textColor = SettingsTheme.Color.secondaryText
+        resetLabel.lineBreakMode = .byTruncatingTail
 
-        let timeLabel = NSTextField(labelWithString: window.resetText)
-        timeLabel.font = SettingsTheme.Typography.caption
-        timeLabel.textColor = SettingsTheme.Color.secondaryText
-        timeLabel.setContentHuggingPriority(.required, for: .horizontal)
+        var contentViews: [NSView] = [topRow, progress]
+        if !metricViews.isEmpty {
+            let metricsRow = NSStackView(views: metricViews)
+            metricsRow.orientation = .horizontal
+            metricsRow.alignment = .top
+            metricsRow.distribution = .fillEqually
+            metricsRow.spacing = 16
+            contentViews.append(metricsRow)
+        }
+        contentViews.append(resetLabel)
 
-        let row = NSStackView(views: [label, progress, percentLabel, absoluteLabel, timeLabel])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 8
+        let contentStack = NSStackView(views: contentViews)
+        contentStack.orientation = .vertical
+        contentStack.alignment = .leading
+        contentStack.spacing = 10
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let card = NSView()
+        card.wantsLayer = true
+        card.layer?.cornerRadius = SettingsTheme.Radius.usageCard
+        card.layer?.backgroundColor = SettingsTheme.Color.usageCardBackground.cgColor
+        card.layer?.borderColor = SettingsTheme.Color.usageCardBorder.cgColor
+        card.layer?.borderWidth = 1
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(contentStack)
 
         NSLayoutConstraint.activate([
             progress.heightAnchor.constraint(equalToConstant: 8),
+            contentStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 10),
+            contentStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
+            contentStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
+            contentStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -10),
+            card.heightAnchor.constraint(greaterThanOrEqualToConstant: SettingsTheme.Layout.usageCardMinHeight),
         ])
 
-        return row
+        return card
     }
 
-    private func makeToggleRow(vm: SettingsProviderViewModel) -> NSView {
-        let toggleLabel = NSTextField(labelWithString: "Show in menu bar")
-        toggleLabel.font = SettingsTheme.Typography.body
-        toggleLabel.textColor = SettingsTheme.Color.primaryText
+    private func makeMetricBlock(title: String, value: String) -> NSView {
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = SettingsTheme.Typography.usageMetricTitle
+        titleLabel.textColor = SettingsTheme.Color.tertiaryText
 
-        let toggle = NSSwitch()
-        toggle.state = vm.isVisible ? .on : .off
-        toggle.controlSize = .small
+        let valueLabel = NSTextField(labelWithString: value)
+        valueLabel.font = SettingsTheme.Typography.usageMetricValue
+        valueLabel.textColor = SettingsTheme.Color.primaryText
 
-        let bridge = ToggleSwitchBridge(providerID: vm.providerID) { [weak self] id, visible in
-            self?.onVisibilityChanged?(id, visible)
+        let block = NSStackView(views: [titleLabel, valueLabel])
+        block.orientation = .vertical
+        block.alignment = .leading
+        block.spacing = 2
+        return block
+    }
+
+    private func applyRefreshFeedback(on button: NSButton, indicator: NSProgressIndicator) {
+        refreshFeedbackResetWorkItem?.cancel()
+        button.isEnabled = false
+        button.isHidden = true
+        button.toolTip = "Refreshing usage..."
+        indicator.isHidden = false
+        indicator.startAnimation(nil)
+
+        let resetWorkItem = DispatchWorkItem { [weak button, weak indicator] in
+            button?.isEnabled = true
+            button?.isHidden = false
+            button?.toolTip = "Refresh usage"
+            indicator?.stopAnimation(nil)
+            indicator?.isHidden = true
         }
-        toggle.target = bridge
-        toggle.action = #selector(ToggleSwitchBridge.toggled(_:))
-        toggleBridge = bridge
-
-        toggle.setContentHuggingPriority(.required, for: .horizontal)
-        toggle.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        let row = NSStackView(views: [toggleLabel, spacer, toggle])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 8
-        return row
+        refreshFeedbackResetWorkItem = resetWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: resetWorkItem)
     }
 
     private func makeDivider() -> NSBox {

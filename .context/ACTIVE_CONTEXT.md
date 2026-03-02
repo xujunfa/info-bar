@@ -3,54 +3,64 @@
 ## 当前状态
 
 - 阶段：execute
-- 里程碑：3 — Provider Usage 映射增强（当前）
-- 状态：未开始
+- 里程碑：5 — 回归验证与文档沉淀（当前）
+- 状态：进行中
 - 最后更新：2026-03-02
 
 ## 里程碑进度
 
 ### 已完成
 
-- [x] 里程碑 1 完成：设置页视觉系统升级（1.1 ~ 1.5 全部完成并在计划中打勾）。
-- [x] 里程碑 2 完成：Usage 信息模型扩展（2.1 ~ 2.5 全部完成并在计划中打勾）。
-- [x] `QuotaWindow` 扩展字段落地：`used/limit/remaining/unit/windowTitle/metadata`，并补齐边界清洗（nil/负值/超限、字符串去空、metadata 过滤）。
-- [x] 新增 `UsageFormatting.swift`，统一处理大数缩写、单位拼接、空值降级与 reset 文案。
-- [x] 扩展 `SettingsProviderViewModel.WindowViewModel`，新增 `absoluteUsageText` 与 `resetText`；支持 `windowTitle` 优先显示。
-- [x] 更新设置页 usage 行渲染：显示百分比、绝对值、reset 提示。
-- [x] `QuotaDisplayModel` 增加窗口 label 为空时的兜底回退。
-- [x] 里程碑 2 回归通过：
-  - `swift test --filter 'QuotaSnapshotTests|SettingsProviderViewModelTests'`
-  - `swift test --filter 'QuotaDisplayModelTests|SettingsWindowControllerTests'`
+- [x] 里程碑 1 完成：设置页视觉系统升级（1.1 ~ 1.5）。
+- [x] 里程碑 2 完成：Usage 信息模型扩展（2.1 ~ 2.5）。
+- [x] 里程碑 3 完成：Provider Usage 映射增强（3.1 ~ 3.6）。
+- [x] 里程碑 4 完成：设置页信息呈现重构（4.1 ~ 4.6）。
+- [x] 里程碑 5.1（阶段性）完成两轮用户反馈修正并通过设置页定向测试。
 
 ### 进行中
 
-- 无。
+- 5.1 全量回归收口：设置页定向行为已稳定，待执行全量 `swift test` 验证跨模块无回归。
 
 ### 待完成
 
-- [ ] 3.1 增强 Codex 映射，补充可推导字段并明确字段缺失时策略。
-- [ ] 3.2 增强 MiniMax 映射，输出 total/used/remaining 与周期信息。
-- [ ] 3.3 增强 BigModel 映射，覆盖 tokens/time 两类窗口的详细字段。
-- [ ] 3.4 增强 ZenMux 映射，尽量解析数组/对象两种 payload 下的补充字段。
-- [ ] 3.5 增强 Factory 映射，输出月度 token 维度的 used/limit/remaining 与 resetAt。
-- [ ] 3.6 对 Supabase Connector 读取链路补充字段稳定性测试（空记录、字段缺失、格式变化）。
+- [ ] 5.1 执行 quota 相关全量测试并修复回归。
+- [ ] 5.2 编写 provider usage 字段映射矩阵文档。
+- [ ] 5.3 编写设置页展示规范文档。
+- [ ] 5.4 更新扩展与主程序协作文档。
+- [ ] 5.5 形成手工验收清单并记录结果。
 
 ## 交接备注
 
-- 里程碑 2 关键文件：
-  - `Sources/InfoBar/Modules/Quota/QuotaSnapshot.swift`
-  - `Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
-  - `Sources/InfoBar/UI/Settings/UsageFormatting.swift`（新增）
+- 本轮（用户反馈优化）关键改动文件：
   - `Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`
+  - `Sources/InfoBar/UI/Settings/SettingsTheme.swift`
   - `Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
-  - `Tests/InfoBarTests/Modules/Quota/QuotaSnapshotTests.swift`
   - `Tests/InfoBarTests/UI/Settings/SettingsProviderViewModelTests.swift`
-- 建议里程碑 3 执行顺序：先 `Factory/BigModel`（已有绝对值来源明显），再 `MiniMax/Codex/ZenMux`，最后补齐映射回归测试。
-- 当前未跑全量 `swift test`；仅执行了里程碑 2 相关定向测试。
+  - `Tests/InfoBarTests/UI/Settings/SettingsWindowControllerTests.swift`
+  - `.context/DECISIONS.md`（追加 DEC-010/DEC-011）
+- 已落地的 UI/信息架构调整：
+  - 左侧列表仅显示 provider 名称 + `Updated: ...`（移除 `Visible` 与用量摘要）。
+  - 右上保留无标签可见性开关 + Refresh，底部开关行已移除。
+  - Usage 卡片移除 metadata 噪声信息，仅展示用量与 reset 时间。
+  - Refresh 点击反馈：短暂禁用并显示 `Refreshing usage...`。
+  - reset 文案升级为绝对时间 + 相对剩余：`resets at MM-dd HH:mm (in X)`。
+  - 无数据指标不展示（不再出现 `-` 占位）；tokens 场景新增 `TOKENS (M)`。
+  - Header 在 `ID` 同行展示 `Account`（当 metadata 含邮箱/手机号等账号标识时）。
+- 本轮新增修正（第二轮反馈）：
+  - 5h/周窗口命名统一：`Current interval/H` 统一为 `5-hour usage`，`W` 统一为 `Weekly usage`。
+  - 左侧列表行高提升到 46，并恢复可见性状态小圆点（绿色=显示、灰色=隐藏）。
+  - Refresh 改为更紧凑按钮，点击显示 spinner 加载态，反馈时长缩短到约 0.45s。
+  - 点击列表空白区域不再清空选择；非空列表始终保持至少一个选中项。
+- 已执行并通过：`swift test --filter 'SettingsProviderViewModelTests|SettingsWindowControllerTests'`
+- 下一步建议：先执行全量 `swift test` 完成 5.1，再推进 5.2~5.5 文档与验收清单。
 
 ## 最近变更
 
-- 2026-03-02：完成里程碑 2 全部任务并在 `.context/IMPLEMENTATION_PLAN.md` 勾选 2.1~2.5。
-- 2026-03-02：推进当前执行里程碑到 `3 — Provider Usage 映射增强`。
-- 2026-03-02：修复设置页交互问题：菜单栏点击特定 Provider 时设置页可预选该 Provider；支持 `⌘W` 关闭设置页窗口，并通过 `SettingsWindowControllerTests`（18 项）回归。
-- 2026-03-02：修复“菜单栏预选后左侧未高亮”问题：`ProviderListRowView` 在 `rowViewForRow` 创建时同步 selected/hovered 状态，并新增回归测试覆盖。
+- 2026-03-02：完成里程碑 4 全部任务并在 `.context/IMPLEMENTATION_PLAN.md` 勾选 4.1~4.6。
+- 2026-03-02：根据用户反馈完成设置页降噪改版（列表改为更新时间、右上开关、移除 metadata 文案）。
+- 2026-03-02：刷新按钮增加点击反馈（短暂禁用 + `Refreshing usage...` 提示）。
+- 2026-03-02：新增 reset 精确时间展示、隐藏无效 usage 指标、新增 `TOKENS (M)` 展示与顶部 account 信息展示。
+- 2026-03-02：设置页定向测试通过（41 tests, 0 failures）。
+- 2026-03-02：统一 5h/周窗口命名，提升左侧行高并恢复可见性小圆点状态。
+- 2026-03-02：Refresh 增加 spinner 加载态并缩短反馈时长；列表空白点击不再导致取消选中。
+- 2026-03-02：设置页定向测试更新并通过（43 tests, 0 failures）。

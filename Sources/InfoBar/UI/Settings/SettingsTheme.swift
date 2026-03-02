@@ -8,11 +8,12 @@ enum SettingsTheme {
         static let detailMinimumWidth: CGFloat = 320
         static let contentInset: CGFloat = 20
         static let listContentInset = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
-        static let listRowHeight: CGFloat = 38
+        static let listRowHeight: CGFloat = 46
         static let listRowSpacing: CGFloat = 1
         static let listCellHorizontalInset: CGFloat = 10
         static let placeholderMaxWidth: CGFloat = 360
         static let usagePlaceholderHeight: CGFloat = 70
+        static let usageCardMinHeight: CGFloat = 104
     }
 
     enum Radius {
@@ -21,6 +22,8 @@ enum SettingsTheme {
         static let icon: CGFloat = 8
         static let statusDot: CGFloat = 5
         static let placeholder: CGFloat = 12
+        static let usageCard: CGFloat = 10
+        static let statusBadge: CGFloat = 9
     }
 
     enum Typography {
@@ -28,8 +31,12 @@ enum SettingsTheme {
         static var providerTitle: NSFont { NSFont.systemFont(ofSize: 18, weight: .semibold) }
         static var body: NSFont { NSFont.systemFont(ofSize: 13, weight: .regular) }
         static var caption: NSFont { NSFont.systemFont(ofSize: 11, weight: .regular) }
+        static var captionBold: NSFont { NSFont.systemFont(ofSize: 11, weight: .semibold) }
         static var section: NSFont { NSFont.systemFont(ofSize: 11, weight: .semibold) }
         static var usageLabel: NSFont { NSFont.monospacedSystemFont(ofSize: 12, weight: .regular) }
+        static var usageMetricTitle: NSFont { NSFont.systemFont(ofSize: 10, weight: .semibold) }
+        static var usageMetricValue: NSFont { NSFont.monospacedSystemFont(ofSize: 12, weight: .medium) }
+        static var idText: NSFont { NSFont.monospacedSystemFont(ofSize: 10, weight: .regular) }
         static var placeholderTitle: NSFont { NSFont.systemFont(ofSize: 15, weight: .semibold) }
     }
 
@@ -83,6 +90,18 @@ enum SettingsTheme {
 
         static var placeholderBorder: NSColor {
             NSColor.separatorColor.withAlphaComponent(0.65)
+        }
+
+        static var usageCardBackground: NSColor {
+            NSColor.controlBackgroundColor.withAlphaComponent(0.45)
+        }
+
+        static var usageCardBorder: NSColor {
+            NSColor.separatorColor.withAlphaComponent(0.55)
+        }
+
+        static var statusBadgeBackground: NSColor {
+            NSColor.controlBackgroundColor.withAlphaComponent(0.75)
         }
     }
 }

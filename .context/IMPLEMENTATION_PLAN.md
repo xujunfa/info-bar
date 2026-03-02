@@ -67,17 +67,17 @@
 
 ### 任务
 
-- [ ] 3.1 增强 Codex 映射，补充可推导字段并明确字段缺失时策略
+- [x] 3.1 增强 Codex 映射，补充可推导字段并明确字段缺失时策略
   - 文件：`Sources/InfoBar/Modules/Quota/CodexUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/CodexUsageClientTests.swift`
-- [ ] 3.2 增强 MiniMax 映射，输出 total/used/remaining 与周期信息
+- [x] 3.2 增强 MiniMax 映射，输出 total/used/remaining 与周期信息
   - 文件：`Sources/InfoBar/Modules/Quota/MiniMaxUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/MiniMaxUsageClientTests.swift`
-- [ ] 3.3 增强 BigModel 映射，覆盖 tokens/time 两类窗口的详细字段
+- [x] 3.3 增强 BigModel 映射，覆盖 tokens/time 两类窗口的详细字段
   - 文件：`Sources/InfoBar/Modules/Quota/BigModelUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/BigModelUsageClientTests.swift`
-- [ ] 3.4 增强 ZenMux 映射，尽量解析数组/对象两种 payload 下的补充字段
+- [x] 3.4 增强 ZenMux 映射，尽量解析数组/对象两种 payload 下的补充字段
   - 文件：`Sources/InfoBar/Modules/Quota/ZenMuxUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/ZenMuxUsageClientTests.swift`
-- [ ] 3.5 增强 Factory 映射，输出月度 token 维度的 used/limit/remaining 与 resetAt
+- [x] 3.5 增强 Factory 映射，输出月度 token 维度的 used/limit/remaining 与 resetAt
   - 文件：`Sources/InfoBar/Modules/Quota/FactoryUsageClient.swift`、`Tests/InfoBarTests/Modules/Quota/FactoryUsageClientTests.swift`
-- [ ] 3.6 对 Supabase Connector 读取链路补充字段稳定性测试（空记录、字段缺失、格式变化）
+- [x] 3.6 对 Supabase Connector 读取链路补充字段稳定性测试（空记录、字段缺失、格式变化）
   - 文件：`Sources/InfoBar/Modules/Quota/SupabaseConnectorEventClient.swift`、`Tests/InfoBarTests/Modules/Quota/FactoryUsageClientTests.swift`
 
 ### 验收标准
@@ -94,17 +94,17 @@
 
 ### 任务
 
-- [ ] 4.1 重构右侧 Header（Provider 标识、更新时间、刷新动作、状态标识）
+- [x] 4.1 重构右侧 Header（Provider 标识、更新时间、刷新动作、状态标识）
   - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
-- [ ] 4.2 将 Usage 区升级为信息卡（进度条 + used/remaining/limit + 单位 + reset）
+- [x] 4.2 将 Usage 区升级为信息卡（进度条 + used/remaining/limit + 单位 + reset）
   - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
-- [ ] 4.3 增加窗口级补充信息展示（如模型/窗口类型/数据来源字段）
+- [x] 4.3 增加窗口级补充信息展示（如模型/窗口类型/数据来源字段）
   - 文件：`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`、`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`
-- [ ] 4.4 升级左侧列表摘要（主标题 + 次要 usage 摘要 + 可见性状态）
+- [x] 4.4 升级左侧列表摘要（主标题 + 次要 usage 摘要 + 可见性状态）
   - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`、`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`
-- [ ] 4.5 保持现有交互能力（拖拽排序、显示开关、手动刷新）并修复潜在 UI 回归
+- [x] 4.5 保持现有交互能力（拖拽排序、显示开关、手动刷新）并修复潜在 UI 回归
   - 文件：`Sources/InfoBar/UI/Settings/SettingsWindowController.swift`、`Sources/InfoBarApp/main.swift`
-- [ ] 4.6 补齐设置页展示层测试（ViewModel 输出、回调链路、关键文案）
+- [x] 4.6 补齐设置页展示层测试（ViewModel 输出、回调链路、关键文案）
   - 文件：`Tests/InfoBarTests/UI/Settings/SettingsProviderViewModelTests.swift`、`Tests/InfoBarTests/UI/Settings/SettingsWindowControllerTests.swift`
 
 ### 验收标准
