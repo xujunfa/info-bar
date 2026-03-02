@@ -25,7 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Phase 1: create modules & widgets for every provider, but do NOT call start() yet.
         for provider in providers {
-            let menuBar = MenuBarController(providerID: provider.id)
+            let providerID = provider.id
+            let menuBar = MenuBarController(providerID: providerID)
             let widget = QuotaWidget()
             let reader = QuotaReader(fetcher: provider.makeFetcher())
             let module = QuotaModule(reader: reader)
@@ -33,20 +34,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             widget.onSnapshot = { [weak self, weak menuBar] snapshot in
                 Task { @MainActor [weak self] in
                     menuBar?.update(snapshot: snapshot)
-                    self?.snapshots[provider.id] = snapshot
+                    self?.snapshots[providerID] = snapshot
                     self?.pushSnapshotsToSettings(defaultIDs: defaultIDs)
                 }
             }
             menuBar.onClicked = { [weak self] in
-                self?.settingsWindowController.show()
+                self?.settingsWindowController.show(selectingProviderID: providerID)
             }
             module.setWidgets([widget])
             module.mount()
 
-            menuBarsByID[provider.id] = menuBar
+            menuBarsByID[providerID] = menuBar
             quotaWidgets.append(widget)
             quotaModules.append(module)
-            quotaModulesByID[provider.id] = module
+            quotaModulesByID[providerID] = module
         }
 
         // Phase 2: mount status items in stored order so the menu bar matches settings.

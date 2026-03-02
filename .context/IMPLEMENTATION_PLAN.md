@@ -42,15 +42,15 @@
 
 ### 任务
 
-- [ ] 2.1 扩展 `QuotaWindow` 结构，新增可选字段（used、limit、remaining、unit、windowTitle、metadata）
+- [x] 2.1 扩展 `QuotaWindow` 结构，新增可选字段（used、limit、remaining、unit、windowTitle、metadata）
   - 文件：`Sources/InfoBar/Modules/Quota/QuotaSnapshot.swift`
-- [ ] 2.2 保持现有调用方兼容，完善默认值与边界处理（nil/负值/超限）
+- [x] 2.2 保持现有调用方兼容，完善默认值与边界处理（nil/负值/超限）
   - 文件：`Sources/InfoBar/Modules/Quota/QuotaSnapshot.swift`、`Sources/InfoBar/Modules/Quota/QuotaDisplayModel.swift`
-- [ ] 2.3 扩展 `SettingsProviderViewModel.WindowViewModel`，支持展示“百分比 + 绝对值 + 单位 + 重置信息”
+- [x] 2.3 扩展 `SettingsProviderViewModel.WindowViewModel`，支持展示“百分比 + 绝对值 + 单位 + 重置信息”
   - 文件：`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`
-- [ ] 2.4 增加统一格式化工具（大数缩写、单位拼接、空值降级文案）
+- [x] 2.4 增加统一格式化工具（大数缩写、单位拼接、空值降级文案）
   - 文件：`Sources/InfoBar/UI/Settings/UsageFormatting.swift`（新增）、`Sources/InfoBar/UI/Settings/SettingsProviderViewModel.swift`
-- [ ] 2.5 更新模型测试覆盖新字段映射与格式化输出
+- [x] 2.5 更新模型测试覆盖新字段映射与格式化输出
   - 文件：`Tests/InfoBarTests/Modules/Quota/QuotaSnapshotTests.swift`、`Tests/InfoBarTests/UI/Settings/SettingsProviderViewModelTests.swift`
 
 ### 验收标准

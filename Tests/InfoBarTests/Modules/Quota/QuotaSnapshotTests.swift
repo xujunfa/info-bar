@@ -26,4 +26,63 @@ final class QuotaSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.windows[1].usedPercent, 0)
         XCTAssertEqual(snapshot.primaryUsedRatio, 1.0)
     }
+
+    func testQuotaWindowSanitizesOptionalUsageFields() {
+        let window = QuotaWindow(
+            id: "monthly",
+            label: "M",
+            usedPercent: 42,
+            resetAt: Date(timeIntervalSince1970: 1_900_000_000),
+            used: 1_500,
+            limit: 1_000,
+            remaining: -10,
+            unit: " tokens ",
+            windowTitle: " Monthly budget ",
+            metadata: [
+                " source ": " api ",
+                "": "invalid",
+                "note": ""
+            ]
+        )
+
+        XCTAssertEqual(window.used, 1_000)
+        XCTAssertEqual(window.limit, 1_000)
+        XCTAssertEqual(window.remaining, 0)
+        XCTAssertEqual(window.unit, "tokens")
+        XCTAssertEqual(window.windowTitle, "Monthly budget")
+        XCTAssertEqual(window.metadata, ["source": "api"])
+    }
+
+    func testQuotaWindowInfersRemainingFromUsedAndLimitWhenMissing() {
+        let window = QuotaWindow(
+            id: "monthly",
+            label: "M",
+            usedPercent: 25,
+            resetAt: Date(),
+            used: 250,
+            limit: 1_000,
+            remaining: nil,
+            unit: "tokens"
+        )
+
+        XCTAssertEqual(window.used, 250)
+        XCTAssertEqual(window.limit, 1_000)
+        XCTAssertEqual(window.remaining, 750)
+    }
+
+    func testQuotaWindowDropsInvalidLimitAndKeepsUsed() {
+        let window = QuotaWindow(
+            id: "monthly",
+            label: "M",
+            usedPercent: 25,
+            resetAt: Date(),
+            used: 250,
+            limit: 0,
+            unit: "tokens"
+        )
+
+        XCTAssertEqual(window.used, 250)
+        XCTAssertNil(window.limit)
+        XCTAssertNil(window.remaining)
+    }
 }

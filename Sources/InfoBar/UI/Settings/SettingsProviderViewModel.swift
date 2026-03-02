@@ -7,8 +7,12 @@ public struct SettingsProviderViewModel: Equatable {
     public struct WindowViewModel: Equatable {
         public let label: String
         public let usedPercent: Int
+        /// Human-readable absolute usage, e.g. "1.2K/10K tokens" or "—" when unavailable.
+        public let absoluteUsageText: String
         /// Human-readable time until reset, e.g. "2d", "3h", "45m", or "—" if past/unknown.
         public let timeLeft: String
+        /// Human-readable reset message, e.g. "resets in 2d".
+        public let resetText: String
     }
 
     // MARK: - Properties
@@ -22,7 +26,7 @@ public struct SettingsProviderViewModel: Equatable {
 
     // MARK: - Init
 
-    public init(providerID: String, snapshot: QuotaSnapshot?, isVisible: Bool = true) {
+    public init(providerID: String, snapshot: QuotaSnapshot?, isVisible: Bool = true, now: Date = Date()) {
         self.providerID = providerID
         self.isVisible = isVisible
         self.fetchedAt = snapshot?.fetchedAt
@@ -37,12 +41,19 @@ public struct SettingsProviderViewModel: Equatable {
             .map { "\($0.label): \($0.usedPercent)%" }
             .joined(separator: "  ")
 
-        let now = Date()
         self.windows = snapshot.windows.map { w in
-            WindowViewModel(
-                label: w.label,
+            let timeLeft = Self.formatTimeLeft(from: w.resetAt, now: now)
+            let label = w.windowTitle ?? w.label
+            return WindowViewModel(
+                label: label,
                 usedPercent: w.usedPercent,
-                timeLeft: Self.formatTimeLeft(from: w.resetAt, now: now)
+                absoluteUsageText: UsageFormatting.absoluteUsageText(
+                    used: w.used,
+                    limit: w.limit,
+                    unit: w.unit
+                ),
+                timeLeft: timeLeft,
+                resetText: UsageFormatting.resetText(timeLeft: timeLeft)
             )
         }
     }

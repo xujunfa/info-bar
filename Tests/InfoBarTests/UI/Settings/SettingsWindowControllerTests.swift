@@ -105,6 +105,33 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertTrue(allTexts(in: detailView).contains("Codex"))
     }
 
+    func testShowCanPreselectProviderFromMenuBarClick() throws {
+        let sut = SettingsWindowController()
+        let first = SettingsProviderViewModel(providerID: "codex", snapshot: nil)
+        let second = SettingsProviderViewModel(providerID: "bigmodel", snapshot: nil)
+        sut.update(viewModels: [first, second])
+
+        sut.show(selectingProviderID: "bigmodel")
+
+        let detailView = try XCTUnwrap(detailView(from: sut.window))
+        XCTAssertTrue(allTexts(in: detailView).contains("Bigmodel"))
+    }
+
+    func testShowPreselectAlsoMarksSidebarRowHighlighted() throws {
+        let sut = SettingsWindowController()
+        let first = SettingsProviderViewModel(providerID: "codex", snapshot: nil)
+        let second = SettingsProviderViewModel(providerID: "bigmodel", snapshot: nil)
+        sut.update(viewModels: [first, second])
+
+        sut.show(selectingProviderID: "bigmodel")
+
+        let tableView = try XCTUnwrap(providerTableView(from: sut.window))
+        XCTAssertEqual(tableView.selectedRow, 1)
+
+        let highlighted = try XCTUnwrap(rowSelectionHighlightState(in: tableView, row: 1))
+        XCTAssertTrue(highlighted)
+    }
+
     func testRefreshButtonUsesIconOnlyPresentation() throws {
         let sut = SettingsWindowController()
         sut.show()
@@ -143,6 +170,30 @@ final class SettingsWindowControllerTests: XCTestCase {
 
         let detailView = try XCTUnwrap(detailView(from: sut.window))
         XCTAssertTrue(allTexts(in: detailView).map { $0.lowercased() }.contains("bigmodel"))
+    }
+
+    func testCommandWClosesSettingsPanel() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+        let panel = try XCTUnwrap(sut.window)
+        panel.makeKeyAndOrderFront(nil)
+
+        let event = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: 0,
+            windowNumber: panel.windowNumber,
+            context: nil,
+            characters: "w",
+            charactersIgnoringModifiers: "w",
+            isARepeat: false,
+            keyCode: 13
+        ))
+
+        let handled = panel.performKeyEquivalent(with: event)
+        XCTAssertTrue(handled)
+        XCTAssertFalse(panel.isVisible)
     }
 
     func testOnVisibilityChangedCallbackIsFired() {
@@ -225,6 +276,14 @@ final class SettingsWindowControllerTests: XCTestCase {
         }
 
         return nil
+    }
+
+    private func rowSelectionHighlightState(in tableView: NSTableView, row: Int) -> Bool? {
+        guard let rowView = tableView.rowView(atRow: row, makeIfNecessary: true) else {
+            return nil
+        }
+        let mirror = Mirror(reflecting: rowView)
+        return mirror.children.first(where: { $0.label == "isSelectedForHighlight" })?.value as? Bool
     }
 
     private func makeSnapshot(providerID: String, usedPercent: Int) -> QuotaSnapshot {

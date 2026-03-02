@@ -61,4 +61,67 @@ final class SettingsProviderViewModelTests: XCTestCase {
         let vmNil = SettingsProviderViewModel(providerID: "codex", snapshot: nil)
         XCTAssertNil(vmNil.fetchedAt)
     }
+
+    func testWindowViewModelIncludesAbsoluteUsageAndResetText() {
+        let now = Date()
+        let resetAt = now.addingTimeInterval(3600)
+        let window = QuotaWindow(
+            id: "monthly",
+            label: "M",
+            usedPercent: 26,
+            resetAt: resetAt,
+            used: 1_250,
+            limit: 10_000,
+            unit: "tokens",
+            windowTitle: "Monthly"
+        )
+
+        let vm = SettingsProviderViewModel(
+            providerID: "factory",
+            snapshot: QuotaSnapshot(providerID: "factory", windows: [window], fetchedAt: now),
+            now: now
+        )
+
+        XCTAssertEqual(vm.windows.count, 1)
+        XCTAssertEqual(vm.windows[0].label, "Monthly")
+        XCTAssertEqual(vm.windows[0].absoluteUsageText, "1.3K/10K tokens")
+        XCTAssertEqual(vm.windows[0].resetText, "resets in 1h")
+    }
+
+    func testWindowViewModelFallsBackWhenAbsoluteUsageMissing() {
+        let now = Date()
+        let resetAt = now.addingTimeInterval(-1)
+        let window = QuotaWindow(id: "monthly", label: "M", usedPercent: 26, resetAt: resetAt)
+
+        let vm = SettingsProviderViewModel(
+            providerID: "factory",
+            snapshot: QuotaSnapshot(providerID: "factory", windows: [window], fetchedAt: now),
+            now: now
+        )
+
+        XCTAssertEqual(vm.windows[0].absoluteUsageText, "—")
+        XCTAssertEqual(vm.windows[0].resetText, "reset time unknown")
+    }
+
+    func testWindowViewModelFormatsUsedOnlyAbsoluteValue() {
+        let now = Date()
+        let resetAt = now.addingTimeInterval(120)
+        let window = QuotaWindow(
+            id: "monthly",
+            label: "M",
+            usedPercent: 26,
+            resetAt: resetAt,
+            used: 987,
+            unit: "requests"
+        )
+
+        let vm = SettingsProviderViewModel(
+            providerID: "factory",
+            snapshot: QuotaSnapshot(providerID: "factory", windows: [window], fetchedAt: now),
+            now: now
+        )
+
+        XCTAssertEqual(vm.windows[0].absoluteUsageText, "987 requests")
+        XCTAssertEqual(vm.windows[0].resetText, "resets in 2m")
+    }
 }

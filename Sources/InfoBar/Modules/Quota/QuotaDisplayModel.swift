@@ -74,7 +74,9 @@ public struct QuotaDisplayModel: Equatable {
         guard let window else {
             return "\(fallbackLabel): -- --"
         }
-        return "\(window.label): \(window.usedPercent)% \(durationText(from: fetchedAt, to: window.resetAt))"
+        let normalizedLabel = window.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = normalizedLabel.isEmpty ? fallbackLabel : normalizedLabel
+        return "\(label): \(window.usedPercent)% \(durationText(from: fetchedAt, to: window.resetAt))"
     }
 
     private static func durationText(from start: Date, to end: Date) -> String {

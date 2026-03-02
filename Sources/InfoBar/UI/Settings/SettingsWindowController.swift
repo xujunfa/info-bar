@@ -2,6 +2,18 @@ import AppKit
 
 // MARK: - Public Controller
 
+private final class SettingsPanel: NSPanel {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown,
+           event.modifierFlags.contains(.command),
+           event.charactersIgnoringModifiers?.lowercased() == "w" {
+            close()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 @MainActor
 public final class SettingsWindowController {
     public private(set) var window: NSPanel?
@@ -15,7 +27,7 @@ public final class SettingsWindowController {
 
     public init() {}
 
-    public func show() {
+    public func show(selectingProviderID: String? = nil) {
         if window == nil {
             let (panel, leftVC, rightVC) = makePanel()
             window = panel
@@ -23,7 +35,7 @@ public final class SettingsWindowController {
             detailVC = rightVC
         }
         syncCallbacks()
-        listVC?.reload(viewModels: viewModels)
+        listVC?.reload(viewModels: viewModels, preferredProviderID: selectingProviderID)
         window?.orderFront(nil)
     }
 
@@ -68,7 +80,7 @@ public final class SettingsWindowController {
         splitVC.addSplitViewItem(rightItem)
         splitVC.preferredContentSize = SettingsTheme.Layout.panelSize
 
-        let panel = NSPanel(
+        let panel = SettingsPanel(
             contentRect: NSRect(origin: .zero, size: SettingsTheme.Layout.panelSize),
             styleMask: [.titled, .closable, .nonactivatingPanel],
             backing: .buffered,
@@ -176,14 +188,18 @@ private final class ProviderListViewController: NSViewController,
         view = effectView
     }
 
-    func reload(viewModels: [SettingsProviderViewModel]) {
+    func reload(viewModels: [SettingsProviderViewModel], preferredProviderID: String? = nil) {
         let prevID = selectedProviderID
         currentViewModels = viewModels
         hoveredRow = nil
         tableView.reloadData()
 
-        // Restore or initialize selection
-        if let prevID, let idx = currentViewModels.firstIndex(where: { $0.providerID == prevID }) {
+        // Prefer explicit preselection when provided (e.g. menu bar provider click).
+        if let preferredProviderID,
+           let idx = currentViewModels.firstIndex(where: { $0.providerID == preferredProviderID }) {
+            tableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
+            // tableViewSelectionDidChange fires -> onSelectionChanged
+        } else if let prevID, let idx = currentViewModels.firstIndex(where: { $0.providerID == prevID }) {
             tableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
             // tableViewSelectionDidChange fires -> onSelectionChanged
         } else if !currentViewModels.isEmpty {
@@ -219,6 +235,8 @@ private final class ProviderListViewController: NSViewController,
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let rowView = ProviderListRowView()
+        rowView.isSelectedForHighlight = tableView.selectedRowIndexes.contains(row)
+        rowView.isHoveredForHighlight = (hoveredRow == row)
         rowView.onHoverChanged = { [weak self, weak tableView, weak rowView] isHovered in
             guard let self, let tableView, let rowView else { return }
             let row = tableView.row(for: rowView)
@@ -775,12 +793,17 @@ private final class ProviderDetailViewController: NSViewController {
         percentLabel.textColor = SettingsTheme.Color.primaryText
         percentLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        let timeLabel = NSTextField(labelWithString: "(\(window.timeLeft) left)")
+        let absoluteLabel = NSTextField(labelWithString: window.absoluteUsageText)
+        absoluteLabel.font = SettingsTheme.Typography.caption
+        absoluteLabel.textColor = SettingsTheme.Color.secondaryText
+        absoluteLabel.setContentHuggingPriority(.required, for: .horizontal)
+
+        let timeLabel = NSTextField(labelWithString: window.resetText)
         timeLabel.font = SettingsTheme.Typography.caption
         timeLabel.textColor = SettingsTheme.Color.secondaryText
         timeLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        let row = NSStackView(views: [label, progress, percentLabel, timeLabel])
+        let row = NSStackView(views: [label, progress, percentLabel, absoluteLabel, timeLabel])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 8
