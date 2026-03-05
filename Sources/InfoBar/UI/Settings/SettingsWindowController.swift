@@ -888,6 +888,10 @@ private final class ProviderDetailViewController: NSViewController {
         resetLabel.textColor = SettingsTheme.Color.secondaryText
         resetLabel.lineBreakMode = .byTruncatingTail
 
+        let middleSpacer = NSView()
+        middleSpacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+        middleSpacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+
         var contentViews: [NSView] = [topRow, progress]
         if !metricViews.isEmpty {
             let metricsRow = NSStackView(views: metricViews)
@@ -897,6 +901,7 @@ private final class ProviderDetailViewController: NSViewController {
             metricsRow.spacing = 16
             contentViews.append(metricsRow)
         }
+        contentViews.append(middleSpacer)
         contentViews.append(resetLabel)
 
         let contentStack = NSStackView(views: contentViews)

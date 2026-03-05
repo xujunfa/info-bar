@@ -285,6 +285,42 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertFalse(texts.contains("—"))
     }
 
+    func testUsageCardAddsFlexibleSpacerBeforeResetTextWhenMetricsAreMissing() throws {
+        let sut = SettingsWindowController()
+        sut.show()
+
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let window = QuotaWindow(
+            id: "session",
+            label: "S",
+            usedPercent: 15,
+            resetAt: now.addingTimeInterval(1200),
+            used: 150,
+            unit: "requests"
+        )
+        let vm = SettingsProviderViewModel(
+            providerID: "codex",
+            snapshot: QuotaSnapshot(providerID: "codex", windows: [window], fetchedAt: now),
+            now: now
+        )
+        sut.update(viewModels: [vm])
+
+        let detail = try XCTUnwrap(detailView(from: sut.window))
+        detail.layoutSubtreeIfNeeded()
+
+        let resetLabel = try XCTUnwrap(firstTextField(in: detail) { textField in
+            textField.stringValue.hasPrefix("resets at ")
+        })
+        let contentStack = try XCTUnwrap(resetLabel.superview as? NSStackView)
+        let resetIndex = try XCTUnwrap(contentStack.arrangedSubviews.firstIndex(of: resetLabel))
+        XCTAssertGreaterThan(resetIndex, 0)
+
+        let middleSpacer = contentStack.arrangedSubviews[resetIndex - 1]
+        XCTAssertTrue(middleSpacer.subviews.isEmpty)
+        XCTAssertEqual(middleSpacer.contentHuggingPriority(for: .vertical), .defaultLow)
+        XCTAssertEqual(middleSpacer.contentCompressionResistancePriority(for: .vertical), .defaultLow)
+    }
+
     func testCommandWClosesSettingsPanel() throws {
         let sut = SettingsWindowController()
         sut.show()
@@ -438,6 +474,21 @@ final class SettingsWindowControllerTests: XCTestCase {
             }
         }
 
+        return nil
+    }
+
+    private func firstTextField(
+        in view: NSView,
+        matching predicate: (NSTextField) -> Bool
+    ) -> NSTextField? {
+        if let textField = view as? NSTextField, predicate(textField) {
+            return textField
+        }
+        for subview in view.subviews {
+            if let matched = firstTextField(in: subview, matching: predicate) {
+                return matched
+            }
+        }
         return nil
     }
 
