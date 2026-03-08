@@ -16,8 +16,8 @@ var STORAGE_SUPABASE_CONFIG_KEY = "supabase_config";
 var LEGACY_PROVIDER_STORAGE_KEYS = Object.freeze({
   factory: Object.freeze({
     snapshots: "factory_usage_snapshots",
-    dedupe: "factory_usage_dedupe_index"
-  })
+    dedupe: "factory_usage_dedupe_index",
+  }),
 });
 
 var EXTENSION_CONFIG_EXAMPLE_FILE = "config.example.json";
@@ -27,9 +27,9 @@ var DEFAULT_SUPABASE_CONFIG = Object.freeze({
   enabled: true,
   projectUrl: "",
   table: "connector_events",
-  // Publishable/anon key is intentionally client-side; keep RLS policies strict.
+  // The publishable (anon) key is intentionally kept client-side; ensure RLS policies are strict.
   apiKey: "",
-  readBackLimit: 20
+  readBackLimit: 20,
 });
 
 var MAX_SNAPSHOTS = 100;
@@ -40,7 +40,7 @@ var DEDUPE_BUCKET_MS = 10 * 60 * 1000;
 var SINKS_CONFIG = Object.freeze({
   console: true,
   localStorage: true,
-  supabase: true
+  supabase: true,
 });
 
 function stableStringify(value) {
@@ -84,7 +84,9 @@ function redactSensitive(value) {
   var keys = Object.keys(value);
   for (var index = 0; index < keys.length; index += 1) {
     var key = keys[index];
-    if (/token|authorization|cookie|secret|password|apikey|api_key/i.test(key)) {
+    if (
+      /token|authorization|cookie|secret|password|apikey|api_key/i.test(key)
+    ) {
       cloned[key] = "[REDACTED]";
       continue;
     }
@@ -152,18 +154,25 @@ function normalizeSnapshot(pageEnvelope, sender) {
     provider: provider,
     event: pageEnvelope.event,
     capturedAt: capturedAt,
-    pageUrl: contracts.sanitizeUrl(pageEnvelope.pageUrl || (sender && sender.url) || ""),
+    pageUrl: contracts.sanitizeUrl(
+      pageEnvelope.pageUrl || (sender && sender.url) || "",
+    ),
     request: {
-      url: contracts.sanitizeUrl(pageEnvelope.request && pageEnvelope.request.url),
-      method: contracts.normalizeMethod(pageEnvelope.request && pageEnvelope.request.method),
+      url: contracts.sanitizeUrl(
+        pageEnvelope.request && pageEnvelope.request.url,
+      ),
+      method: contracts.normalizeMethod(
+        pageEnvelope.request && pageEnvelope.request.method,
+      ),
       status:
-        typeof (pageEnvelope.request && pageEnvelope.request.status) === "number"
+        typeof (pageEnvelope.request && pageEnvelope.request.status) ===
+        "number"
           ? pageEnvelope.request.status
           : null,
       ruleId:
         pageEnvelope.request && typeof pageEnvelope.request.ruleId === "string"
           ? pageEnvelope.request.ruleId
-          : ""
+          : "",
     },
     payload: pageEnvelope.payload,
     meta: {
@@ -174,8 +183,8 @@ function normalizeSnapshot(pageEnvelope, sender) {
       hook:
         pageEnvelope.meta && pageEnvelope.meta.hook === "xhr" ? "xhr" : "fetch",
       version: 1,
-      receivedAt: new Date().toISOString()
-    }
+      receivedAt: new Date().toISOString(),
+    },
   };
 
   var capturedTime = new Date(snapshot.capturedAt).getTime();
@@ -209,7 +218,9 @@ function normalizeSupabaseConfig(configLike) {
       ? rawProjectUrl.trim().replace(/\/+$/, "")
       : "";
   var table =
-    typeof raw.table === "string" && raw.table.trim() !== "" ? raw.table.trim() : "connector_events";
+    typeof raw.table === "string" && raw.table.trim() !== ""
+      ? raw.table.trim()
+      : "connector_events";
   var rawApiKey =
     (typeof raw.apiKey === "string" && raw.apiKey) ||
     (typeof raw.anonKey === "string" && raw.anonKey) ||
@@ -217,7 +228,9 @@ function normalizeSupabaseConfig(configLike) {
     "";
   var apiKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
   var readBackLimit = Number(
-    typeof raw.readBackLimit !== "undefined" ? raw.readBackLimit : raw.read_back_limit
+    typeof raw.readBackLimit !== "undefined"
+      ? raw.readBackLimit
+      : raw.read_back_limit,
   );
 
   return {
@@ -226,7 +239,9 @@ function normalizeSupabaseConfig(configLike) {
     table: table,
     apiKey: isPlaceholderSupabaseApiKey(apiKey) ? "" : apiKey,
     readBackLimit:
-      Number.isFinite(readBackLimit) && readBackLimit > 0 ? Math.floor(readBackLimit) : 20
+      Number.isFinite(readBackLimit) && readBackLimit > 0
+        ? Math.floor(readBackLimit)
+        : 20,
   };
 }
 
@@ -234,13 +249,16 @@ async function loadConfigFileByName(fileName) {
   try {
     var response = await fetch(chrome.runtime.getURL(fileName), {
       method: "GET",
-      cache: "no-store"
+      cache: "no-store",
     });
     if (!response.ok) {
       return {};
     }
     var payload = await response.json();
-    if (contracts.isPlainObject(payload) && contracts.isPlainObject(payload.supabase)) {
+    if (
+      contracts.isPlainObject(payload) &&
+      contracts.isPlainObject(payload.supabase)
+    ) {
       return payload.supabase;
     }
     if (contracts.isPlainObject(payload)) {
@@ -273,7 +291,7 @@ function mapSnapshotToSupabaseRow(snapshot) {
     request_rule_id: snapshot.request.ruleId,
     payload: snapshot.payload,
     metadata: snapshot.meta,
-    source: "chrome_extension"
+    source: "chrome_extension",
   };
 }
 
@@ -282,19 +300,25 @@ function mapSupabaseRowToSnapshot(row) {
     return null;
   }
   return {
-    connector: typeof row.connector === "string" ? row.connector : contracts.CONNECTOR_NAME,
+    connector:
+      typeof row.connector === "string"
+        ? row.connector
+        : contracts.CONNECTOR_NAME,
     provider: typeof row.provider === "string" ? row.provider : "",
     event: typeof row.event === "string" ? row.event : "",
     capturedAt: typeof row.captured_at === "string" ? row.captured_at : "",
     pageUrl: typeof row.page_url === "string" ? row.page_url : "",
     request: {
       url: typeof row.request_url === "string" ? row.request_url : "",
-      method: typeof row.request_method === "string" ? row.request_method : "GET",
-      status: typeof row.request_status === "number" ? row.request_status : null,
-      ruleId: typeof row.request_rule_id === "string" ? row.request_rule_id : ""
+      method:
+        typeof row.request_method === "string" ? row.request_method : "GET",
+      status:
+        typeof row.request_status === "number" ? row.request_status : null,
+      ruleId:
+        typeof row.request_rule_id === "string" ? row.request_rule_id : "",
     },
     payload: row.payload,
-    meta: contracts.isPlainObject(row.metadata) ? row.metadata : {}
+    meta: contracts.isPlainObject(row.metadata) ? row.metadata : {},
   };
 }
 
@@ -312,7 +336,12 @@ async function readSupabaseConfig() {
     ? stored[STORAGE_SUPABASE_CONFIG_KEY]
     : {};
   var fileConfig = await loadSupabaseConfigFromExtensionFiles();
-  var merged = Object.assign({}, DEFAULT_SUPABASE_CONFIG, fileConfig, userConfig);
+  var merged = Object.assign(
+    {},
+    DEFAULT_SUPABASE_CONFIG,
+    fileConfig,
+    userConfig,
+  );
   return normalizeSupabaseConfig(merged);
 }
 
@@ -323,13 +352,13 @@ async function ensureSupabaseConfigSeeded() {
     : {};
   var fileConfig = await loadSupabaseConfigFromExtensionFiles();
   var merged = normalizeSupabaseConfig(
-    Object.assign({}, DEFAULT_SUPABASE_CONFIG, fileConfig, existing)
+    Object.assign({}, DEFAULT_SUPABASE_CONFIG, fileConfig, existing),
   );
   await setStorage({ [STORAGE_SUPABASE_CONFIG_KEY]: merged });
   console.info(
     "[info-bar] supabase config initialized:",
     merged.projectUrl || "[MISSING_SUPABASE_URL]",
-    "key=" + maskApiKey(merged.apiKey)
+    "key=" + maskApiKey(merged.apiKey),
   );
 }
 
@@ -347,7 +376,7 @@ async function requestSupabase(config, restPath, init) {
   var response = await fetch(url, {
     method: (init && init.method) || "GET",
     headers: headers,
-    body: init && init.body ? init.body : undefined
+    body: init && init.body ? init.body : undefined,
   });
 
   if (!response.ok) {
@@ -361,7 +390,7 @@ async function requestSupabase(config, restPath, init) {
       "supabase_http_" +
         response.status +
         ":" +
-        (errorText ? errorText.slice(0, 220) : "no_response_body")
+        (errorText ? errorText.slice(0, 220) : "no_response_body"),
     );
   }
 
@@ -379,7 +408,9 @@ async function requestSupabase(config, restPath, init) {
 
 async function readDedupeIndex() {
   var stored = await getStorage([STORAGE_DEDUPE_KEY]);
-  return Array.isArray(stored[STORAGE_DEDUPE_KEY]) ? stored[STORAGE_DEDUPE_KEY] : [];
+  return Array.isArray(stored[STORAGE_DEDUPE_KEY])
+    ? stored[STORAGE_DEDUPE_KEY]
+    : [];
 }
 
 async function writeDedupeIndex(dedupeKeys) {
@@ -443,9 +474,9 @@ async function supabaseSink(snapshot) {
   await requestSupabase(config, config.table + "?on_conflict=dedupe_key", {
     method: "POST",
     headers: {
-      Prefer: "resolution=merge-duplicates,return=minimal"
+      Prefer: "resolution=merge-duplicates,return=minimal",
     },
-    body: JSON.stringify(row)
+    body: JSON.stringify(row),
   });
 }
 
@@ -455,7 +486,10 @@ async function syncRemoteSnapshotsForProvider(provider, reason) {
     return { synced: false, reason: "supabase_disabled_or_missing_config" };
   }
 
-  var limit = Math.min(Math.max(config.readBackLimit, 1), MAX_REMOTE_CACHE_ROWS);
+  var limit = Math.min(
+    Math.max(config.readBackLimit, 1),
+    MAX_REMOTE_CACHE_ROWS,
+  );
   var params = new URLSearchParams();
   params.set(
     "select",
@@ -472,18 +506,24 @@ async function syncRemoteSnapshotsForProvider(provider, reason) {
       "request_status",
       "request_rule_id",
       "payload",
-      "metadata"
-    ].join(",")
+      "metadata",
+    ].join(","),
   );
   params.set("connector", "eq." + contracts.CONNECTOR_NAME);
   params.set("provider", "eq." + provider);
   params.set("order", "captured_at.desc");
   params.set("limit", String(limit));
 
-  var rows = await requestSupabase(config, config.table + "?" + params.toString(), {
-    method: "GET"
-  });
-  var parsedRows = Array.isArray(rows) ? rows.map(mapSupabaseRowToSnapshot).filter(Boolean) : [];
+  var rows = await requestSupabase(
+    config,
+    config.table + "?" + params.toString(),
+    {
+      method: "GET",
+    },
+  );
+  var parsedRows = Array.isArray(rows)
+    ? rows.map(mapSupabaseRowToSnapshot).filter(Boolean)
+    : [];
 
   var stored = await getStorage([STORAGE_REMOTE_CACHE_KEY]);
   var remoteCache = contracts.isPlainObject(stored[STORAGE_REMOTE_CACHE_KEY])
@@ -493,7 +533,7 @@ async function syncRemoteSnapshotsForProvider(provider, reason) {
     syncedAt: new Date().toISOString(),
     reason: reason || "unknown",
     total: parsedRows.length,
-    snapshots: parsedRows
+    snapshots: parsedRows,
   };
   await setStorage({ [STORAGE_REMOTE_CACHE_KEY]: remoteCache });
 
@@ -507,13 +547,18 @@ async function syncRemoteSnapshotsForAllProviders(reason) {
     try {
       var result = await syncRemoteSnapshotsForProvider(provider, reason);
       if (result && result.synced) {
-        console.info("[info-bar] supabase read sync:", provider, "rows=", result.count);
+        console.info(
+          "[info-bar] supabase read sync:",
+          provider,
+          "rows=",
+          result.count,
+        );
       }
     } catch (error) {
       console.warn(
         "[info-bar] supabase read sync failed:",
         provider,
-        error && error.message ? error.message : error
+        error && error.message ? error.message : error,
       );
     }
   }
@@ -537,7 +582,10 @@ async function runSinks(snapshot) {
     try {
       await sinks[index](snapshot);
     } catch (error) {
-      console.warn("[info-bar] sink failed:", error && error.message ? error.message : error);
+      console.warn(
+        "[info-bar] sink failed:",
+        error && error.message ? error.message : error,
+      );
     }
   }
 }
@@ -546,12 +594,19 @@ async function handleCapturedEnvelope(pageEnvelope, sender) {
   var normalized = normalizeSnapshot(pageEnvelope, sender);
   var isDuplicate = await markAndCheckDuplicate(normalized);
   if (isDuplicate) {
-    console.info("[info-bar] duplicate snapshot skipped:", normalized.meta.dedupeKey);
+    console.info(
+      "[info-bar] duplicate snapshot skipped:",
+      normalized.meta.dedupeKey,
+    );
     return { accepted: false, deduped: true };
   }
 
   await runSinks(normalized);
-  return { accepted: true, deduped: false, dedupeKey: normalized.meta.dedupeKey };
+  return {
+    accepted: true,
+    deduped: false,
+    dedupeKey: normalized.meta.dedupeKey,
+  };
 }
 
 async function ensureRefreshAlarms() {
@@ -576,15 +631,23 @@ async function ensureRefreshAlarms() {
 
     chrome.alarms.create(alarmName, {
       delayInMinutes: Number(config.refresh.delayInMinutes || 1),
-      periodInMinutes: period
+      periodInMinutes: period,
     });
-    console.info("[info-bar] refresh alarm scheduled:", provider, "every", period, "minutes.");
+    console.info(
+      "[info-bar] refresh alarm scheduled:",
+      provider,
+      "every",
+      period,
+      "minutes.",
+    );
   }
 }
 
 async function readRuntimeState() {
   var stored = await getStorage([STORAGE_RUNTIME_KEY]);
-  return contracts.isPlainObject(stored[STORAGE_RUNTIME_KEY]) ? stored[STORAGE_RUNTIME_KEY] : {};
+  return contracts.isPlainObject(stored[STORAGE_RUNTIME_KEY])
+    ? stored[STORAGE_RUNTIME_KEY]
+    : {};
 }
 
 async function writeRuntimeState(runtimeState) {
@@ -596,13 +659,19 @@ async function shouldThrottleRefresh(provider, nowMs) {
   var byProvider = contracts.isPlainObject(runtimeState.refreshByProvider)
     ? runtimeState.refreshByProvider
     : {};
-  var providerState = contracts.isPlainObject(byProvider[provider]) ? byProvider[provider] : {};
+  var providerState = contracts.isPlainObject(byProvider[provider])
+    ? byProvider[provider]
+    : {};
   var config = contracts.getProviderConfig(provider);
   var minIntervalMinutes =
-    config && config.refresh ? Number(config.refresh.minIntervalMinutes || 20) : 20;
+    config && config.refresh
+      ? Number(config.refresh.minIntervalMinutes || 20)
+      : 20;
   var minIntervalMs = minIntervalMinutes * 60 * 1000;
   var lastTriggeredAt =
-    typeof providerState.lastTriggeredAt === "number" ? providerState.lastTriggeredAt : 0;
+    typeof providerState.lastTriggeredAt === "number"
+      ? providerState.lastTriggeredAt
+      : 0;
 
   if (nowMs - lastTriggeredAt < minIntervalMs) {
     return true;
@@ -610,7 +679,7 @@ async function shouldThrottleRefresh(provider, nowMs) {
 
   byProvider[provider] = {
     lastTriggeredAt: nowMs,
-    lastTriggeredAtISO: new Date(nowMs).toISOString()
+    lastTriggeredAtISO: new Date(nowMs).toISOString(),
   };
   runtimeState.refreshByProvider = byProvider;
   await writeRuntimeState(runtimeState);
@@ -629,14 +698,19 @@ async function handleRefreshAlarm(provider) {
     return;
   }
 
-  var tabPatterns = Array.isArray(config.tabUrlPatterns) ? config.tabUrlPatterns : [];
+  var tabPatterns = Array.isArray(config.tabUrlPatterns)
+    ? config.tabUrlPatterns
+    : [];
   if (tabPatterns.length === 0) {
     return;
   }
 
   var tabs = await chrome.tabs.query({ url: tabPatterns });
   if (!Array.isArray(tabs) || tabs.length === 0) {
-    console.info("[info-bar] refresh alarm fired but no tabs are open:", provider);
+    console.info(
+      "[info-bar] refresh alarm fired but no tabs are open:",
+      provider,
+    );
     return;
   }
 
@@ -653,7 +727,7 @@ async function handleRefreshAlarm(provider) {
         source: contracts.CONNECTOR_NAME,
         schemaVersion: contracts.SCHEMA_VERSION,
         provider: provider,
-        reason: "alarm"
+        reason: "alarm",
       });
       triggered += 1;
     } catch (_error) {
@@ -661,7 +735,12 @@ async function handleRefreshAlarm(provider) {
     }
   }
 
-  console.info("[info-bar] refresh alarm dispatched:", provider, "tabs=", triggered);
+  console.info(
+    "[info-bar] refresh alarm dispatched:",
+    provider,
+    "tabs=",
+    triggered,
+  );
 
   // Lightweight server-side read sync to keep remote cache in local storage.
   void syncRemoteSnapshotsForProvider(provider, "alarm");
@@ -681,26 +760,30 @@ chrome.runtime.onStartup.addListener(function onStartup() {
   void syncRemoteSnapshotsForAllProviders("onStartup");
 });
 
-chrome.runtime.onMessage.addListener(function onMessage(message, sender, sendResponse) {
-  if (!isBridgeMessage(message)) {
-    return;
-  }
+chrome.runtime.onMessage.addListener(
+  function onMessage(message, sender, sendResponse) {
+    if (!isBridgeMessage(message)) {
+      return;
+    }
 
-  handleCapturedEnvelope(message.payload, sender)
-    .then(function onSuccess(result) {
-      sendResponse({ ok: true, result: result });
-    })
-    .catch(function onFailure(error) {
-      var reason = error && error.message ? error.message : String(error);
-      console.error("[info-bar] failed to process snapshot:", reason);
-      sendResponse({ ok: false, error: reason });
-    });
+    handleCapturedEnvelope(message.payload, sender)
+      .then(function onSuccess(result) {
+        sendResponse({ ok: true, result: result });
+      })
+      .catch(function onFailure(error) {
+        var reason = error && error.message ? error.message : String(error);
+        console.error("[info-bar] failed to process snapshot:", reason);
+        sendResponse({ ok: false, error: reason });
+      });
 
-  return true;
-});
+    return true;
+  },
+);
 
 chrome.alarms.onAlarm.addListener(function onAlarm(alarm) {
-  var provider = contracts.parseRefreshProviderFromAlarmName(alarm && alarm.name);
+  var provider = contracts.parseRefreshProviderFromAlarmName(
+    alarm && alarm.name,
+  );
   if (!provider) {
     return;
   }
