@@ -4,11 +4,15 @@ import AppKit
 
 private final class SettingsPanel: NSPanel {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.type == .keyDown,
-           event.modifierFlags.contains(.command),
-           event.charactersIgnoringModifiers?.lowercased() == "w" {
-            close()
-            return true
+        if event.type == .keyDown, event.modifierFlags.contains(.command) {
+            let char = event.charactersIgnoringModifiers?.lowercased()
+            if char == "w" {
+                close()
+                return true
+            } else if char == "q" {
+                NSApplication.shared.terminate(nil)
+                return true
+            }
         }
         return super.performKeyEquivalent(with: event)
     }

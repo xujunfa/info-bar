@@ -7,9 +7,18 @@ import Foundation
 private final class ButtonActionBridge: NSObject {
     var action: (() -> Void)?
 
-    @objc func buttonClicked(_ sender: Any?) {
-        print("[MenuBarController] buttonClicked fired")
-        action?()
+    @objc func buttonClicked(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        let isRightClick = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+        if isRightClick {
+            let menu = NSMenu()
+            menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+            if let ev = event {
+                NSMenu.popUpContextMenu(menu, with: ev, for: sender)
+            }
+        } else {
+            action?()
+        }
     }
 }
 
@@ -44,6 +53,7 @@ public final class MenuBarController {
             }
             button.target = bridge
             button.action = #selector(ButtonActionBridge.buttonClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             actionBridge = bridge
         }
     }
