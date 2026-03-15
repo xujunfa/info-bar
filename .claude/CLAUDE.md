@@ -4,6 +4,14 @@
 
 Info Bar：macOS 菜单栏应用，同屏展示多个 Coding Agent 的 Quota/Usage、一些其他必要的信息。
 
+## 技术栈
+
+- SPM (`swift-tools-version: 6.2`)，macOS 14+
+- 纯 AppKit（无 SwiftUI、无 WebView）
+- 依赖：`SweetCookieKit`（浏览器 cookie 读取）
+- 数据来源：直接 API（Codex/ZenMux/MiniMax/BigModel）或 Supabase（Factory 经 Chrome Extension 采集）
+- 配置：`config.example.json` + `config.local.json`（gitignored）
+
 ## 不可破坏约束
 
 - Menu Bar 风格固定：左 icon + 右侧两行文本（Stats 风格）
@@ -37,9 +45,10 @@ SettingsWindowController (NSPanel 640×440)
 - H/W 场景固定行位：`top = W`, `bottom = H`
 - 若 H 缺失：显示 `H: -- --`
 - Pace 颜色算法（状态来源）：
-  - `elapsed = 1 - remain/duration`
+  - `elapsed = clamp(1 - remain/duration)`
   - `expected = 0.8 * elapsed^1.1`
-  - `urgency = max(0, expected-used)/0.8 * (0.35 + 0.65 * elapsed^1.6)`
+  - `baseUrgency = clamp(max(0, expected-used) / 0.8)`（clamped to [0, 1]）
+  - `urgency = baseUrgency * (0.35 + 0.65 * elapsed^1.6)`
   - `warning >= 0.30`, `critical >= 0.60`
 - 特殊规则：**若 W 缺失且 H 存在，只按 H 计算 Pace 颜色**
 
@@ -57,10 +66,21 @@ SettingsWindowController (NSPanel 640×440)
 
 ## 扩展新 Provider（最小流程）
 
+### 直接 API 路径（Codex/ZenMux/MiniMax/BigModel）
+
 1. 新建 `<Provider>UsageClient` 实现 `QuotaSnapshotFetching`
 2. 将 provider 响应映射到 `QuotaSnapshot + [QuotaWindow]`
 3. 在 `QuotaProviderRegistry.defaultProviders()` 注册
-4. 补测试：解码/映射/回归
+4. 添加 SVG icon 到 `Resources/Icons/`（必须 `isTemplate = true`）
+5. 补测试：解码/映射/回归
+
+### Supabase Connector 路径（Factory）
+
+1. 在 Chrome Extension `contracts.js` 添加 provider 配置和 capture rule
+2. 新建 `<Provider>UsageClient`，内部使用 `SupabaseConnectorEventClient` + 自定义 `snapshotMapper`
+3. 在 `QuotaProviderRegistry.defaultProviders()` 注册
+4. 补测试
+5. 参见 `docs/connector-ui-dataflow.md`
 
 ## Menu Bar 顺序管理
 
@@ -93,11 +113,17 @@ SettingsWindowController (NSPanel 640×440)
   1. `.claude/CLAUDE.md`
   2. `.context/HANDOFF.md`
 - 按需读：
-  - `.context/DESIGN.md`（UI/交互改动时）
-  - `.context/archive/*`（仅追溯历史时）
+  - `.context/ACTIVE_CONTEXT.md`（查看里程碑进度时）
+  - `.context/DESIGN.md`（理解架构 / UI 交互改动时）
+  - `.context/IMPLEMENTATION_PLAN.md`（查看具体任务分解时）
+  - `.context/DECISIONS.md`（理解历史决策时）
+  - `.context/archive/*`（仅追溯历史交接时）
 - 默认禁止：一次性全量读取 archive 或无关长文档
 
 ## 参考
 
 - 当前交接：`.context/HANDOFF.md`
+- 技术设计：`.context/DESIGN.md`
+- 里程碑进度：`.context/ACTIVE_CONTEXT.md`
+- 决策日志：`.context/DECISIONS.md`
 - 历史交接：`.context/archive/`

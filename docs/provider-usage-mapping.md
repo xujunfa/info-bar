@@ -1,6 +1,6 @@
 # Provider Usage Mapping Matrix
 
-Last updated: 2026-03-02
+Last updated: 2026-03-11
 
 ## Canonical model used by InfoBar
 
@@ -134,14 +134,23 @@ Field mapping matrix:
 
 | Canonical field | Source priority | Fallback strategy |
 | --- | --- | --- |
-| `used` | nested `usage.standard.orgTotalTokensUsed` -> `userTokens` -> `orgOverageUsed` -> broad alias scan (`current_month_usage`, `used_tokens`, `consumed`, etc.) | derive from `limit - remaining`; if `limit` exists and still nil, derive from `usedPercent` |
-| `limit` | nested `usage.standard.totalAllowance` -> `basicAllowance` -> broad alias scan (`monthly_limit`, `quota`, `total`, etc.) | derive from `used + remaining`; if still nil and `used` exists, use default `20,000,000` |
-| `remaining` | nested `usage.standard.remainingAllowance` -> `orgRemainingTokens` -> broad alias scan (`monthly_remaining`, `left_tokens`, etc.) | derive from `limit - used` |
+| `used` | nested `usage.standard.orgTotalTokensUsed` -> `userTokens` -> `orgOverageUsed` -> broad alias scan (see below) | derive from `limit - remaining`; if `limit` exists and still nil, derive from `usedPercent` |
+| `limit` | nested `usage.standard.totalAllowance` -> `basicAllowance` -> broad alias scan (see below) | derive from `used + remaining`; if still nil and `used` exists, use default `20,000,000` |
+| `remaining` | nested `usage.standard.remainingAllowance` -> `orgRemainingTokens` -> broad alias scan (see below) | derive from `limit - used` |
 | `usedPercent` | nested `usage.standard.usedRatio` | parse percentage aliases (`used_percent`, `usageRate`, `ratio`, etc.), then derive from usage arithmetic |
 | `resetAt` | nested `usage.endDate` | parse common reset aliases (`reset_at`, `period_end`, `endDate`, etc.), then month-end of `fetchedAt` |
 | `windowTitle` | `window_title`/`title`/`plan_name`/`subscription_name` | default `Monthly tokens` |
 | `unit` | `unit`/`token_unit`/`usage_unit` | default `tokens` |
 | `metadata` | always include `connector` + `event`; optional `dedupe_key`, `trace_id` | omitted optional keys when empty |
+
+Factory broad alias scan accepts both `snake_case` and `camelCase` variants. Full alias lists:
+
+- **used**: `current_month_usage`, `currentMonthUsage`, `month_usage`, `monthUsage`, `usage`, `used`, `used_tokens`, `usedTokens`, `consumed`, `consumed_tokens`, `total_usage`, `totalUsage`
+- **limit**: `monthly_limit`, `monthlyLimit`, `month_limit`, `monthLimit`, `token_limit`, `tokenLimit`, `quota`, `total_quota`, `totalQuota`, `limit`, `total`
+- **remaining**: `monthly_remaining`, `monthlyRemaining`, `month_remaining`, `monthRemaining`, `remaining_tokens`, `remainingTokens`, `remaining`, `left`, `left_tokens`, `leftTokens`
+- **resetAt**: `reset_at`, `resetAt`, `next_reset_at`, `nextResetAt`, `cycle_end_time`, `cycleEndTime`, `period_end`, `periodEnd`, `expires_at`, `expiresAt`, `endDate`, `end_date`
+
+The alias scan uses recursive deep search into the payload JSON tree, so nested keys are also matched.
 
 ## UI-side label normalization
 

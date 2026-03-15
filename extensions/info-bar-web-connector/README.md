@@ -57,8 +57,7 @@ RLS policies:
 1. Open `chrome://extensions`
 2. Enable `Developer mode`
 3. Click `Load unpacked`
-4. Select:
-   `/Users/xujunfa/.codex/worktrees/69be/info-bar/extensions/info-bar-web-connector`
+4. Select the `extensions/info-bar-web-connector` directory in this repository
 
 ## Runtime config (config.example/config.local)
 
@@ -177,7 +176,7 @@ Expected logs:
    - `web_accessible_resources.matches`
 3. Reload extension.
 
-No pipeline code changes are required if target responses are JSON.
+No pipeline code changes are required if target responses are JSON. However, `bridge.js` currently hardcodes `factory-hook.js` injection — adding a second provider may require extending the content script to inject the corresponding hook file.
 
 ## InfoBar app integration contract
 

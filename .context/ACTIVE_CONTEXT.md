@@ -5,7 +5,7 @@
 - 阶段：execute
 - 里程碑：5 — 回归验证与文档沉淀（已完成）
 - 状态：已完成
-- 最后更新：2026-03-02
+- 最后更新：2026-03-11
 
 ## 里程碑进度
 
@@ -47,6 +47,7 @@
 
 ## 最近变更
 
+- 2026-03-11：全面 review 并重写 `DESIGN.md`（与实际架构对齐）、清理 `HANDOFF.md`、更新 `CLAUDE.md`、修正 docs。
 - 2026-03-02：执行全量 `swift test`，结果 117 passed / 1 skipped / 0 failed。
 - 2026-03-02：新增 `docs/provider-usage-mapping.md`，沉淀 5 个 provider 的字段优先级与降级策略矩阵。
 - 2026-03-02：更新 `docs/settings-ui-spec.md`，补齐卡片结构、文案规则、空态规则与交互约束。
