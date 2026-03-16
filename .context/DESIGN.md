@@ -21,6 +21,7 @@ Each provider gets its own `NSStatusItem` showing a two-line text widget (Stats-
 | Persistence | `UserDefaults` | Provider order, visibility |
 | External data | Supabase REST API | For Factory provider (via Chrome Extension) |
 | Config | `config.example.json` + `config.local.json` | Supabase credentials, gitignored |
+| CI/CD | GitHub Actions + `build_app.sh` | Automated `.dmg` packaging on version tag |
 
 ## 3. Project Structure
 
@@ -87,6 +88,8 @@ InfoBar/
 ├── Tests/InfoBarTests/                  # XCTest suite (~117 tests)
 ├── extensions/
 │   └── info-bar-web-connector/          # Chrome Extension (MV3)
+├── build_app.sh                         # macOS .app and .dmg packaging script
+├── generate_icon.sh                     # macOS .icns generation script
 └── docs/
     ├── provider-usage-mapping.md
     ├── settings-ui-spec.md
@@ -245,6 +248,8 @@ Each provider occupies its own `NSStatusItem` via `MenuBarController`:
   - Format: `<label>: <used%> <timeLeft>`
   - Top line = Weekly (W) or first window
   - Bottom line = Hourly (H) or second window
+
+Right-clicking (or Control+click) the menu bar item opens a native `NSMenu` allowing the user to `Quit` the application.
 
 Layout constants (`QuotaLayoutMetrics`):
 - `statusWidth = 100`, `statusHeight = 22`

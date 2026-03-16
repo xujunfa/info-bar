@@ -1,0 +1,29 @@
+name: Build and Release macOS App
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on tags starting with v, e.g., v1.0.0
+
+# Permissions needed to create a Release
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build and Package App
+        run: |
+          chmod +x build_app.sh
+          ./build_app.sh
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: InfoBar.dmg
+          generate_release_notes: true
